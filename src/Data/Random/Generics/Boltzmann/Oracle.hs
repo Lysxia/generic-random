@@ -12,6 +12,7 @@ import qualified Data.IntSet as IntSet
 import Data.Traversable
 import GHC.Prim (Any)
 import Unsafe.Coerce
+import Data.Random.Generics.Boltzmann.PowerSeries
 import Data.Random.Generics.Boltzmann.Solver
 
 data SomeData where
@@ -102,7 +103,7 @@ toEquation ix t (a_, tyInfo) = (X (ix ? t), eqn tyInfo)
           case (dataTypeRep . dataTypeOf) a of
             AlgRep _ -> Zero
             _ -> One
-    eqn xs = ((X 0 *) . sum . fmap (toProd . snd)) xs
+    eqn xs = X 0 * (sum' . fmap (toProd . snd)) xs
     toProd = prod' . fmap (\t -> X (ix ? t))
 
 -- | Equation defining the derivative @C'(x) of a type, from that of @C(x)@.
@@ -114,9 +115,32 @@ toEquation' (n, _) (X i, e2) = (X (i+n), e2')
     d i = X (i + n)
 toEquation' _ _ = error "Expected equation produced by toEquation"
 
+type PowerSeries' = PowerSeries Integer
+
+-- | Compute all generating functions @C(x)@.
+gfEval :: [Equation] -> HashMap Int PowerSeries'
+gfEval es = pss
+  where
+    pss = HashMap.fromList . zip [0 ..] $
+      x 1 : fmap (eval (pss HashMap.!) . snd) es
+
 -- | The expected size @n@ of an object produced by a Boltzmann sampler with
 -- generating function @C(x)@ is @n = x * C'(x) / C(x)@.
 --
 -- Given a target n, we will solve that equation for x.
 sizeEquation :: Index -> TypeRep -> Int -> Equation
 sizeEquation ix t n = (fromIntegral n * X (ix ? t), X 0 * X (ix ?. t))
+
+-- | The whole system.
+--
+-- Since only one equation (the first one) depends on the size parameter, as
+-- well as the target type, the others are thunked as soon as the first two
+-- parameters are passed to this function.
+sizedSystem :: Index -> H -> TypeRep -> Int -> [Equation]
+sizedSystem ix h = \t n -> sizeEquation ix t n : es
+  where
+    es = toEquations ix h
+
+-- | Using linear approximations of the generating functions, we get an initial
+-- guess of the solution of the system of equations.
+initialGuess = undefined
