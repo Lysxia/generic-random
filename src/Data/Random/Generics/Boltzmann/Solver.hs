@@ -15,6 +15,7 @@ import Numeric.LinearAlgebra
 
 data Exp
   = X Int
+  | Constant Integer
   | Sum [Exp]
   | Prod [Exp]
   deriving (Eq, Ord, Show, Data, Generic, Typeable)
@@ -27,10 +28,12 @@ instance Num Exp where
   abs = id
   signum x | isZero x = Zero
   signum x = x
-  fromInteger n = Sum (replicate (fromInteger n) One)
+  fromInteger = Constant
 
-pattern Zero = Sum []
-pattern One = Prod []
+pattern Zero = Constant 0
+pattern One = Constant 1
+
+isZero, isOne :: Exp -> Bool
 
 isZero Zero = True
 isZero _ = False
@@ -40,12 +43,14 @@ isOne _ = False
 
 eval :: Num a => (Int -> a) -> Exp -> a
 eval x (X i) = x i
+eval _ (Constant n) = fromInteger n
 eval x (Sum xs) = sum (fmap (eval x) xs)
 eval x (Prod xs) = product (fmap (eval x) xs)
 
 differentiate :: Int -> Exp -> Exp
 differentiate i (X j) | i == j = One
 differentiate _ (X _) = Zero
+differentiate _ (Constant _) = Zero
 differentiate i (Sum xs) = sum' $ fmap (differentiate i) xs
 differentiate i (Prod xs) = sum' $
   [ prod' (differentiate i x : xs') | (x, xs') <- selectFrom xs ]
@@ -55,18 +60,28 @@ selectFrom xs =
   [ (x, a ++ b) | (a, x : b) <- (liftA2 zip inits tails) xs ]
 
 prod' :: [Exp] -> Exp
-prod' xs | any isZero xs = Zero
-prod' xs = (Prod . flattenProds . filter (not . isOne)) xs
+prod' = prod_ 1 []
   where
-    flattenProds = (>>= \case Prod xs -> xs ; x -> [x])
+    prod_ 0 _ _ = Zero
+    prod_ n xs' (Prod xs0 : xs) = prod_ n xs' (xs0 ++ xs)
+    prod_ n xs' (Constant m : xs) = prod_ (n * m) xs' xs
+    prod_ n xs' (x : xs) = prod_ n (x : xs') xs
+    prod_ n [] [] = Constant n
+    prod_ n xs' [] = Prod (Constant n : xs')
 
 sum' :: [Exp] -> Exp
-sum' = Sum . flattenSums . filter (not . isZero)
+sum' = sum_ 0 []
   where
-    flattenSums = (>>= \case Sum xs -> xs ; x -> [x])
+    sum_ n xs' (Sum xs0 : xs) = sum_ n xs' (xs0 ++ xs)
+    sum_ n xs' (Constant m : xs) = sum_ (n + m) xs' xs
+    sum_ n xs' (x : xs) = sum_ n (x : xs') xs
+    sum_ n [] [] = Constant n
+    sum_ 0 xs' [] = Sum xs'
+    sum_ n xs' [] = Sum (Constant n : xs')
 
 collectXs :: Exp -> IntSet
 collectXs (X i) = IntSet.singleton i
+collectXs (Constant _) = IntSet.empty
 collectXs (Sum xs) = (IntSet.unions . fmap collectXs) xs
 collectXs (Prod xs) = (IntSet.unions . fmap collectXs) xs
 
@@ -94,6 +109,7 @@ data SolveArgs = SolveArgs
   , numIterations :: Int
   } deriving (Eq, Ord, Show)
 
+defSolveArgs :: SolveArgs
 defSolveArgs = SolveArgs 1e-8 100
 
 solve

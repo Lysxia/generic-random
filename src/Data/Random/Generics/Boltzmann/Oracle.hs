@@ -5,7 +5,6 @@ import Control.Monad
 import Control.Monad.Fix
 import Control.Monad.State
 import Data.Data
-import Data.Foldable
 import Data.Functor
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
@@ -112,6 +111,7 @@ toEquation' (n, _) (X i, e2) = (X (i+n), e2')
     e2' = sum [ d y * differentiate y e2 | y <- (IntSet.toList . collectXs) e2 ]
     d 0 = 1
     d i = X (i + n)
+toEquation' _ _ = error "Expected equation produced by toEquation"
 
 -- | The expected size @n@ of an object produced by a Boltzmann sampler with
 -- generating function @C(x)@ is @n = x * C'(x) / C(x)@.

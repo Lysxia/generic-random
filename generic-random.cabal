@@ -29,6 +29,7 @@ library
     MonadRandom,
     QuickCheck
   default-language:    Haskell2010
+  ghc-options: -Wall -fno-warn-name-shadowing
 
 test-suite test-gr
   type:             exitcode-stdio-1.0
