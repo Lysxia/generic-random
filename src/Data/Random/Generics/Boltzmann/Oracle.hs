@@ -92,6 +92,7 @@ toEquations ix h = HashMap.toList h >>= \(t, tyDesc) ->
 -- | Equation defining the generating function @C(x)@ of a type.
 --
 -- If it is primitive, @C(x) = 1@ (i.e., its values have size 0).
+-- If it is empty, @C(x) = 0@.
 toEquation :: Index -> TypeRep -> (SomeData, [(constr, [TypeRep])]) -> Equation
 toEquation ix t (a_, tyInfo) = (X (ix ? t), eqn tyInfo)
   where
