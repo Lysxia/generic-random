@@ -67,7 +67,9 @@ prod' = prod_ 1 []
     prod_ n xs' (Constant m : xs) = prod_ (n * m) xs' xs
     prod_ n xs' (x : xs) = prod_ n (x : xs') xs
     prod_ n [] [] = Constant n
-    prod_ n xs' [] = Prod (Constant n : xs')
+    prod_ 1 [x] [] = x
+    prod_ 1 xs' [] = Prod (reverse xs')
+    prod_ n xs' [] = Prod (Constant n : reverse xs')
 
 sum' :: [Exp] -> Exp
 sum' = sum_ 0 []
@@ -76,8 +78,9 @@ sum' = sum_ 0 []
     sum_ n xs' (Constant m : xs) = sum_ (n + m) xs' xs
     sum_ n xs' (x : xs) = sum_ n (x : xs') xs
     sum_ n [] [] = Constant n
-    sum_ 0 xs' [] = Sum xs'
-    sum_ n xs' [] = Sum (Constant n : xs')
+    sum_ 0 [x] [] = x
+    sum_ 0 xs' [] = Sum (reverse xs')
+    sum_ n xs' [] = Sum (Constant n : reverse xs')
 
 collectXs :: Exp -> IntSet
 collectXs (X i) = IntSet.singleton i
@@ -124,9 +127,10 @@ solve SolveArgs{..} f jacobian = newton numIterations
     newton n x =
       let y = f x
       in if norm_Inf y > accuracy then
-        newton (n - 1) (x - jacobian x <\> y)
+        newton (n - 1) (g (x - jacobian x <\> y))
       else
         Just x
+    g = cmap (max 0)
 
 solveEquations
   :: SolveArgs

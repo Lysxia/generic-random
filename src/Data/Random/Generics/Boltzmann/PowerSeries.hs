@@ -6,6 +6,9 @@ import Data.Functor
 -- | A power series with coefficients of type @a@.
 newtype PowerSeries a = PowerSeries [a]
 
+instance Show a => Show (PowerSeries a) where
+  show (PowerSeries a) = "PowerSeries " ++ show (take 10 a)
+
 -- | We can save some work by skipping leading zeroes.
 --
 -- We don't represent leading zeroes with a single @Int@ because that's
@@ -45,3 +48,7 @@ factor (PowerSeries as) = (length zs, as')
 
 takeCoef :: Int -> PowerSeries a -> [a]
 takeCoef n (PowerSeries a) = take n a
+
+differentiateSeries :: Num a => PowerSeries a -> PowerSeries a
+differentiateSeries (PowerSeries as) = PowerSeries as'
+  where as' = (zipWith ((*) . fromInteger) [1 ..] . drop 1) as
