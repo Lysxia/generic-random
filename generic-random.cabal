@@ -15,13 +15,17 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:
+    Data.Random.Generics.Boltzmann.Oracle
     Data.Random.Generics.Boltzmann.Solver
   build-depends:
     base >= 4.7 && < 5,
+    ghc-prim,
     generic-deriving,
+    containers,
     unordered-containers,
     hmatrix,
     vector,
+    mtl,
     MonadRandom,
     QuickCheck
   default-language:    Haskell2010

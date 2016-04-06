@@ -1,4 +1,4 @@
--- | Representing systems of generating functions
+-- | Solve systems of equations
 
 {-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 {-# LANGUAGE LambdaCase, PatternSynonyms, RecordWildCards #-}
@@ -8,7 +8,9 @@ import Control.Applicative
 import Data.Data
 import Data.Function
 import Data.List
-import Generics.Deriving (Generic)
+import Data.IntSet ( IntSet )
+import qualified Data.IntSet as IntSet
+import Generics.Deriving ( Generic )
 import Numeric.LinearAlgebra
 
 data Exp
@@ -62,6 +64,11 @@ sum' :: [Exp] -> Exp
 sum' = Sum . flattenSums . filter (not . isZero)
   where
     flattenSums = (>>= \case Sum xs -> xs ; x -> [x])
+
+collectXs :: Exp -> IntSet
+collectXs (X i) = IntSet.singleton i
+collectXs (Sum xs) = (IntSet.unions . fmap collectXs) xs
+collectXs (Prod xs) = (IntSet.unions . fmap collectXs) xs
 
 -- | e1 == e2, also e1 - e2 == 0
 type Equation = (Exp, Exp)
