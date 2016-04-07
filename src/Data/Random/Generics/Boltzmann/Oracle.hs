@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ImplicitParams, PartialTypeSignatures #-}
 module Data.Random.Generics.Boltzmann.Oracle where
 
 import Control.Monad
@@ -14,6 +15,7 @@ import qualified Data.HashMap.Lazy as HashMap
 import qualified Data.IntSet as IntSet
 import Data.Traversable
 import GHC.Prim ( Any )
+import GHC.Stack ( CallStack, showCallStack )
 import Numeric.LinearAlgebra ( (!), vector )
 import Unsafe.Coerce
 import Data.Random.Generics.Boltzmann.PowerSeries
@@ -30,53 +32,219 @@ instance Show SomeData where
 -- Primitive types and empty types are mapped to an empty constructor list, and
 -- can be distinguished using @Data.Data.dataTypeRep@ on the attached
 -- @SomeData@.
-type H = HashMap TypeRep (SomeData, [(Constr, [TypeRep])])
+--
+-- We map types to integers for more efficient and practical indexing.
+-- The first component @n@ is the total number of types present.
+--
+-- Every type has an index @1 <= i <= n@; the variable @X i@ represents its
+-- generating function @C_i(x)@, and @X (i + k*n)@ the GF of its @k@-th
+-- "pointing" @C^(k)(x)@: @C^(k+1)(x) = x * C^(k)'(x)@ where @C^(k)'@ is the
+-- derivative of @C^(k)@.
+--
+-- @X 0@ is the parameter @x@ of the generating functions.
+--
+-- The /leading coefficient/ of a power series is its first non-zero
+-- coefficient.
+
+data DataDef = DataDef
+  { count :: Int -- ^ Number of registered types
+  , points :: Int -- ^ Number of iterations of the pointing operation
+  , index :: HashMap TypeRep Int -- ^ Map from types to integers
+  , xedni :: HashMap Int SomeData -- ^ Inverse map from index to types
+  , types :: HashMap I [(Integer, Constr, [I])]
+  -- ^ Structure of types and their pointings (up to @points@)
+  --
+  -- The integer is a multiplicity which can be > 1 for pointings.
+  , order :: HashMap Int Int
+  -- ^ Orders of the generating functions @C_i(x)@: smallest size of
+  -- objects of a given type.
+  , lCoef :: HashMap I Integer
+  -- ^ Leading coefficients: number of objects of smallest size.
+  } deriving Show
+
+-- | A pair @(i,k)@ represents the @k@-th "pointing" of the type at index @i@,
+-- with generating function @C_i^(k)(x)@.
+type I = (Int, Int)
 
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
+emptyDataDef :: DataDef
+emptyDataDef = DataDef
+  { count = 0
+  , points = 0
+  , index = HashMap.empty
+  , xedni = HashMap.empty
+  , types = HashMap.empty
+  , order = HashMap.empty
+  , lCoef = HashMap.empty
+  }
+
 -- | Find all types that may be types of subterms of a value of type @a@.
 --
 -- This will loop if there are infinitely many such types.
-collectTypes :: Data a => a -> H
-collectTypes a = collectTypesM a `execState` HashMap.empty
+collectTypes :: Data a => a -> DataDef
+collectTypes a = collectTypesM a `execState` emptyDataDef
+
+-- | A wrapper to construct indices of @C_i^(k)@.
+c :: Int -> Int -> I
+c = (,)
+
+-- | Primitive datatypes have @C(x) = x@ (i.e., are considered as
+-- having a single object of size 1).
+primOrder :: Int
+primOrder = 1
+
+primLeadCoef :: Integer
+primLeadCoef = 1
+
+collectTypesM :: Data a => a -> State DataDef (Int, Int, Integer)
+collectTypesM a = do
+  let t = typeRep [a]
+  DataDef{..} <- get
+  case HashMap.lookup t index of
+    Nothing -> do
+      let i = count + 1
+      modify $ \dd -> dd
+        { count = i
+        , index = HashMap.insert t i index
+        , xedni = HashMap.insert i (SomeData a) xedni
+        , order = HashMap.insert i (error "Unknown order") order
+        , lCoef = HashMap.insert (c i 0) 0 lCoef }
+      collectTypesM' a t i -- Updates order and lCoef
+    Just i ->
+      let
+        order_i = order #! i
+        lCoef_i = lCoef #! c i 0
+      in return (i, order_i, lCoef_i)
 
 -- | Traversal of the definition of a datatype.
-collectTypesM :: Data a => a -> State H ()
-collectTypesM a = do
-  h <- get
-  let
-    t = typeRep [a]
-    d = dataTypeOf a
-  unless (HashMap.member t h) $
-    void . mfix $ \tyInfo -> do
-      put (HashMap.insert t (SomeData a, tyInfo) h)
-      if isAlgType d then do
-        let
-          cs = dataTypeConstrs d
-          collect :: GUnfold (StateT [TypeRep] (State H))
-          collect f' = f' >>= \f ->
-            let b = ofType f
-            in lift (collectTypesM b) >> modify' (typeRep [b] :) $> f undefined
-        forM cs $ \c -> do
-          ts <- gunfold collect return c `asTypeOf` return a `execStateT` []
-          return (c, ts)
-      else
-        return []
+collectTypesM'
+  :: Data a => a -> TypeRep -> Int -> State DataDef (Int, Int, Integer)
+collectTypesM' a t i = do
+  let d = dataTypeOf a
+  (types_i, order_i, lCoef_i) <-
+    if isAlgType d then do
+      let
+        constrs = dataTypeConstrs d
+        collect :: GUnfold (StateT ([Int], Int, Integer) (State DataDef))
+        collect mkCon = do
+          f <- mkCon
+          let b = ofType f
+          (j, order_, lead_) <- lift (collectTypesM b)
+          modify $ \(js, order', lead') ->
+            (j : js, order_ + order', lead_ * lead')
+          return (f b)
+      cjols <- forM constrs $ \constr -> do
+        (js, order', lead') <-
+          gunfold collect return constr `asTypeOf` return a
+            `execStateT` ([], 1, 1)
+        return ((1, constr, [ c j 0 | j <- js]), (order', lead'))
+      let
+        (types_i, ols) = unzip cjols
+        (order_i, lCoef_i) = minSum ols
+      return (types_i, order_i, lCoef_i)
+    else
+      return ([], primOrder, primLeadCoef)
+  modify $ \dd@DataDef{..} -> dd
+    { types = HashMap.insert (c i 0) types_i types
+    , order = HashMap.insert i order_i order
+    , lCoef = HashMap.insert (c i 0) lCoef_i lCoef
+    }
+  return (i, order_i, lCoef_i)
 
--- | Type annotation. The produced value should not be evaluated.
-ofType :: (b -> a) -> b
-ofType _ = undefined
+-- | If @(o, l)@ represents a power series of order @o@ and leading coefficient
+-- @l@, and similarly for @(o', l')@, this finds the order and leading
+-- coefficient of their sum.
+minPlus :: (Ord int, Eq integer, Num integer)
+  => (int, integer) -> (int, integer) -> (int, integer)
+minPlus ol@(order, lCoef) ol'@(order', lCoef')
+  | lCoef' == 0 = ol
+  | order < order' = ol
+  | order > order' = ol'
+  | otherwise = (order, lCoef + lCoef')
 
--- | We map types to integers to interface with the vector-based system solver.
+minSum :: (Ord int, Bounded int, Eq integer, Num integer)
+  => [(int, integer)] -> (int, integer)
+minSum = foldl minPlus (maxBound, 0)
+
+-- | Pointing operation.
 --
--- Every type has an index @i >= 1@; the variable @X i@ represents its
--- generating function @C(x)@, and @X (i + n)@ its derivative @C'(x)@, where
--- @n@ is the total number of types present and recorded in the first
--- component of @Index@.
+-- Populates a @DataDef@ with one more level of pointings.
 --
--- @X 0@ is the parameter @x@ of the generating functions.
-type Index = (Int, HashMap TypeRep Int)
+-- The "pointing" of a type @t@ is a derived type whose values are essentially
+-- values of type @t@, with one of its constructors being "pointed".
+-- Alternatively, we may turn every constructor into variants that indicate
+-- the position of points.
+--
+-- @
+--   -- Original type
+--   data Tree = Node Tree Tree | Leaf
+--   -- Pointing of Tree
+--   data Tree'
+--     = Tree' Tree -- Point at the root
+--     | Node'0 Tree' Tree -- Point to the left
+--     | Node'1 Tree Tree' -- Point to the right
+--   -- Pointing of the pointing
+--   -- Notice that the "points" introduced by both pointing operations
+--   -- are considered different: exchanging their positions (when different)
+--   -- produces a different tree.
+--   data Tree''
+--     = Tree'' Tree' -- Point 2 at the root, the inner Tree' places point 1
+--     | Node'0' Tree' Tree -- Point 1 at the root, point 2 to the left
+--     | Node'1' Tree Tree' -- Point 1 at the root, point 2 to the right
+--     | Node'0'0 Tree'' Tree -- Points 1 and 2 to the left
+--     | Node'0'1 Tree' Tree' -- Point 1 to the left, point 2 to the right
+--     | Node'1'0 Tree' Tree' -- Point 1 to the right, point 2 to the left
+--     | Node'0'1 Tree Tree'' -- Points 1 and 2 to the right
+-- @
+--
+-- If we ignore points, some constructors are equivalent. Thus we may simply
+-- calculate their multiplicity instead of duplicating them.
+--
+-- Given a constructor with @c@ arguments @C x_1 ... x_c@, and a sequence
+-- @p_0 + p_1 + ... + p_c = k@ corresponding to a distribution of @k@ points
+-- (@p_0@ are assigned to the constructor @C@ itself), the
+-- multiplicity of the constructor with that distribution is the
+-- multinomial coefficient @multinomial k [p_1, ..., p_c]@.
+
+point :: DataDef -> DataDef
+point dd@DataDef{..} = dd
+  { points = points'
+  , types = foldl g types [1 .. count]
+  , lCoef = foldl f lCoef [1 .. count]
+  } where
+    points' = points + 1
+    f lCoef i = HashMap.insert (c i points') (lCoef' i) lCoef
+    lCoef' i = (lCoef #! c i points) * toInteger (order #! i)
+    g types i = HashMap.insert (c i points') (types' i) types
+    types' i = types #! c i 0 >>= h
+    h (_, constr, js) = do
+      ps <- partitions points' (length js)
+      let
+        mult = multinomial points' ps
+        js' = zipWith (\(j, _) p -> (j, p)) js ps
+      return (mult, constr, js')
+
+partitions :: Int -> Int -> [[Int]]
+partitions k 0 = [[]]
+partitions k n = do
+  p <- [0 .. k]
+  (p :) <$> partitions (k - p) (n - 1)
+
+-- | Multinomial coefficient.
+multinomial :: Int -> [Int] -> Integer
+multinomial n [] = 1
+multinomial n (p : ps) = binomial n p * multinomial (n - p) ps
+
+-- | Binomial coefficient.
+binomial :: Int -> Int -> Integer
+binomial = \n k -> pascal !! n !! k
+  where
+    pascal = [1] : fmap nextRow pascal
+    nextRow r = zipWith (+) (0 : r) (r ++ [0])
+
+{-
 
 indexH :: H -> Index
 indexH = mapAccumL (\i _ -> (i + 1, i + 1)) 0
@@ -121,8 +289,6 @@ toEquation' (n, _) (X i, e2) = (X (i+n), e2')
     d 0 = 1
     d i = X (i + n)
 toEquation' _ _ = error "Expected equation produced by toEquation"
-
-type PowerSeries' = PowerSeries Integer
 
 -- | Compute all generating functions @C(x)@.
 gfEval :: [Equation] -> HashMap Int PowerSeries'
@@ -172,7 +338,7 @@ makeOracle h ix@(n, _) t size = HashMap.fromList
     ps = cPS `HashMap.union` c'PS
     fps = fmap factor ps
     order i = fst (fps HashMap.! i)
-    leadCoef i =
+    lCoef i =
       case snd (fps HashMap.! i) of
         [] -> 0 :: Double
         a : _ -> fromInteger a
@@ -182,7 +348,7 @@ makeOracle h ix@(n, _) t size = HashMap.fromList
     cToCOverXn (X i, e) = (X i, substAndDivide order (order i) e)
     cToCOverXn _ = error "This doesn't happen."
     -- Use the values of @C_i(x)@ at @x=0@ as the initial vector for the search.
-    initialGuess = vector (1 : fmap (\(X i, _) -> leadCoef i) es)
+    initialGuess = vector (1 : fmap (\(X i, _) -> lCoef i) es)
     v = case solveEquations defSolveArgs (sz : es) initialGuess of
       Nothing -> error "Solution not found."
       Just v_ -> v_
@@ -286,3 +452,17 @@ subst p (Sum xs) = (m, sum' ys)
     (m, ys) = mapAccumL (\m' x ->
       let (m'', y) = subst p x
       in (min m'' m', X 0 ^ (m'' - m) * y)) (maxBound :: Int) xs
+-}
+
+(.>) :: Functor f => f a -> (a -> b) -> f b
+(.>) = flip fmap
+
+(#!) :: (?loc :: CallStack, Eq k, _)
+  => HashMap k v -> k -> v
+h #! k = HashMap.lookupDefault e k h
+  where e = error ("Data.HashMap.(!): key not found\n" ++ showCallStack ?loc)
+
+-- | Type annotation. The produced value should not be evaluated.
+ofType :: (?loc :: CallStack) => (b -> a) -> b
+ofType _ = error
+  ("ofType: this should not be evaluated.\n" ++ showCallStack ?loc)
