@@ -17,7 +17,6 @@ library
   exposed-modules:
     Data.Random.Generics.Boltzmann.Oracle
     Data.Random.Generics.Boltzmann.Solver
-    Data.Random.Generics.Boltzmann.PowerSeries
   build-depends:
     base >= 4.7 && < 5,
     ghc-prim,
