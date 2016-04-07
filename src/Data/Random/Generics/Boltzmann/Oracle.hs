@@ -35,6 +35,7 @@ makeGenerator a k size =
 data SomeData where
   SomeData :: Data a => a -> SomeData
 
+-- | Dummy instance for debugging.
 instance Show SomeData where
   show _ = "_"
 
@@ -65,11 +66,11 @@ data DataDef = DataDef
   , index :: HashMap TypeRep Int -- ^ Map from types to indices
   , xedni :: HashMap Int SomeData -- ^ Inverse map from indices to types
   , types :: HashMap C [(Integer, Constr, [C])]
-  -- ^ Structure of types and their pointings (up to @points@)
+  -- ^ Structure of types and their pointings (up to 'points', initially 0)
   --
   -- Primitive types and empty types are mapped to an empty constructor list, and
-  -- can be distinguished using @Data.Data.dataTypeRep@ on the attached
-  -- @SomeData@.
+  -- can be distinguished using 'Data.Data.dataTypeRep' on the 'SomeData'
+  -- associated to it by 'xedni'.
   --
   -- The integer is a multiplicity which can be > 1 for pointings.
   , order :: HashMap Int Int
@@ -114,7 +115,7 @@ collectTypes :: Data a => a -> DataDef
 collectTypes a = collectTypesM a `execState` emptyDataDef
 
 -- | Primitive datatypes have @C(x) = x@: they are considered as
--- having a single object (@lCoef@) of size 1 (@order@)).
+-- having a single object ('lCoef') of size 1 ('order')).
 primOrder :: Int
 primOrder = 1
 
@@ -199,11 +200,11 @@ minSum = foldl minPlus (maxBound, 0)
 
 -- | Pointing operation.
 --
--- Populates a @DataDef@ with one more level of pointings.
+-- Populates a 'DataDef' with one more level of pointings.
 -- ('collectTypes' produces a dictionary at level 0.)
 --
 -- The "pointing" of a type @t@ is a derived type whose values are essentially
--- values of type @t@, with one of its constructors being "pointed".
+-- values of type @t@, with one of their constructors being "pointed".
 -- Alternatively, we may turn every constructor into variants that indicate
 -- the position of points.
 --
@@ -234,9 +235,10 @@ minSum = foldl minPlus (maxBound, 0)
 --
 -- Given a constructor with @c@ arguments @C x_1 ... x_c@, and a sequence
 -- @p_0 + p_1 + ... + p_c = k@ corresponding to a distribution of @k@ points
--- (@p_0@ are assigned to the constructor @C@ itself), the
--- multiplicity of the constructor with that distribution is the
--- multinomial coefficient @multinomial k [p_1, ..., p_c]@.
+-- (@p_0@ are assigned to the constructor @C@ itself, and for @i > 0@, @p_i@
+-- points are assigned within the @i@-th subterm), the multiplicity of the
+-- constructor paired with that distribution is the multinomial coefficient
+-- @multinomial k [p_1, ..., p_c]@.
 
 point :: DataDef -> DataDef
 point dd@DataDef{..} = dd
@@ -382,11 +384,11 @@ choose getRandomR as = do
       | otherwise = select (x - w) as
     select _ _ = error "Exhausted choices."
 
-(#!) :: (?loc :: CallStack, Eq k, Hashable k, Show k)
+(#!) :: (?loc :: CallStack, Eq k, Hashable k)
   => HashMap k v -> k -> v
 h #! k = HashMap.lookupDefault (e ?loc) k h
   where
-    e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc ++ "\n" ++ show k)
+    e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc)
 
 -- | @partitions k n@: lists of non-negative integers of length @n@ with sum
 -- less than or equal to @k@.
