@@ -1,24 +1,22 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ImplicitParams, PartialTypeSignatures #-}
+{-# LANGUAGE DeriveGeneric, ImplicitParams #-}
+{-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
 module Data.Random.Generics.Boltzmann.Oracle where
 
 import Control.Monad
-import Control.Monad.Fix
 import Control.Monad.Random
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Data
-import Data.Functor
+import Data.Hashable
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
-import qualified Data.IntSet as IntSet
 import Data.Traversable
+import GHC.Generics ( Generic )
 import GHC.Prim ( Any )
 import GHC.Stack ( CallStack, showCallStack )
 import Numeric.LinearAlgebra ( (!), vector )
 import Unsafe.Coerce
-import Data.Random.Generics.Boltzmann.PowerSeries
 import Data.Random.Generics.Boltzmann.Solver
 
 data SomeData where
@@ -51,23 +49,33 @@ data DataDef = DataDef
   , points :: Int -- ^ Number of iterations of the pointing operation
   , index :: HashMap TypeRep Int -- ^ Map from types to integers
   , xedni :: HashMap Int SomeData -- ^ Inverse map from index to types
-  , types :: HashMap I [(Integer, Constr, [I])]
+  , types :: HashMap C [(Integer, Constr, [C])]
   -- ^ Structure of types and their pointings (up to @points@)
   --
   -- The integer is a multiplicity which can be > 1 for pointings.
   , order :: HashMap Int Int
   -- ^ Orders of the generating functions @C_i(x)@: smallest size of
   -- objects of a given type.
-  , lCoef :: HashMap I Integer
+  , lCoef :: HashMap C Integer
   -- ^ Leading coefficients: number of objects of smallest size.
   } deriving Show
 
--- | A pair @(i,k)@ represents the @k@-th "pointing" of the type at index @i@,
+-- | A pair @C i k@ represents the @k@-th "pointing" of the type at index @i@,
 -- with generating function @C_i^(k)(x)@.
-type I = (Int, Int)
+data C = C Int Int
+  deriving (Eq, Ord, Show, Generic)
 
--- | The type of the first argument of @Data.Data.gunfold@.
-type GUnfold m = forall b r. Data b => m (b -> r) -> m r
+instance Hashable C
+
+(?) :: DataDef -> C -> Int
+dd ? C i k = i + k * count dd
+
+ix :: C -> Int
+ix (C i _) = i
+
+(?!) :: DataDef -> Int -> C
+dd ?! j = C (i + 1) k
+  where (k, i) = (j - 1) `divMod` count dd
 
 emptyDataDef :: DataDef
 emptyDataDef = DataDef
@@ -86,17 +94,19 @@ emptyDataDef = DataDef
 collectTypes :: Data a => a -> DataDef
 collectTypes a = collectTypesM a `execState` emptyDataDef
 
--- | A wrapper to construct indices of @C_i^(k)@.
-c :: Int -> Int -> I
-c = (,)
-
--- | Primitive datatypes have @C(x) = x@ (i.e., are considered as
--- having a single object of size 1).
+-- | Primitive datatypes have @C(x) = x@: they are considered as
+-- having a single object (@lCoef@) of size 1 (@order@)).
 primOrder :: Int
 primOrder = 1
 
-primLeadCoef :: Integer
-primLeadCoef = 1
+primlCoef :: Integer
+primlCoef = 1
+
+primExp :: Exp
+primExp = fromIntegral primlCoef * X 0 ^ primOrder
+
+-- | The type of the first argument of @Data.Data.gunfold@.
+type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
 collectTypesM :: Data a => a -> State DataDef (Int, Int, Integer)
 collectTypesM a = do
@@ -110,18 +120,18 @@ collectTypesM a = do
         , index = HashMap.insert t i index
         , xedni = HashMap.insert i (SomeData a) xedni
         , order = HashMap.insert i (error "Unknown order") order
-        , lCoef = HashMap.insert (c i 0) 0 lCoef }
-      collectTypesM' a t i -- Updates order and lCoef
+        , lCoef = HashMap.insert (C i 0) 0 lCoef }
+      collectTypesM' a i -- Updates order and lCoef
     Just i ->
       let
         order_i = order #! i
-        lCoef_i = lCoef #! c i 0
+        lCoef_i = lCoef #! C i 0
       in return (i, order_i, lCoef_i)
 
 -- | Traversal of the definition of a datatype.
 collectTypesM'
-  :: Data a => a -> TypeRep -> Int -> State DataDef (Int, Int, Integer)
-collectTypesM' a t i = do
+  :: Data a => a -> Int -> State DataDef (Int, Int, Integer)
+collectTypesM' a i = do
   let d = dataTypeOf a
   (types_i, order_i, lCoef_i) <-
     if isAlgType d then do
@@ -139,17 +149,17 @@ collectTypesM' a t i = do
         (js, order', lead') <-
           gunfold collect return constr `asTypeOf` return a
             `execStateT` ([], 1, 1)
-        return ((1, constr, [ c j 0 | j <- js]), (order', lead'))
+        return ((1, constr, [ C j 0 | j <- js]), (order', lead'))
       let
         (types_i, ols) = unzip cjols
         (order_i, lCoef_i) = minSum ols
       return (types_i, order_i, lCoef_i)
     else
-      return ([], primOrder, primLeadCoef)
+      return ([], primOrder, primlCoef)
   modify $ \dd@DataDef{..} -> dd
-    { types = HashMap.insert (c i 0) types_i types
+    { types = HashMap.insert (C i 0) types_i types
     , order = HashMap.insert i order_i order
-    , lCoef = HashMap.insert (c i 0) lCoef_i lCoef
+    , lCoef = HashMap.insert (C i 0) lCoef_i lCoef
     }
   return (i, order_i, lCoef_i)
 
@@ -215,146 +225,66 @@ point dd@DataDef{..} = dd
   , lCoef = foldl f lCoef [1 .. count]
   } where
     points' = points + 1
-    f lCoef i = HashMap.insert (c i points') (lCoef' i) lCoef
-    lCoef' i = (lCoef #! c i points) * toInteger (order #! i)
-    g types i = HashMap.insert (c i points') (types' i) types
-    types' i = types #! c i 0 >>= h
+    f lCoef i = HashMap.insert (C i points') (lCoef' i) lCoef
+    lCoef' i = (lCoef #! C i points) * toInteger (order #! i)
+    g types i = HashMap.insert (C i points') (types' i) types
+    types' i = types #! C i 0 >>= h
     h (_, constr, js) = do
       ps <- partitions points' (length js)
       let
         mult = multinomial points' ps
-        js' = zipWith (\(j, _) p -> (j, p)) js ps
+        js' = zipWith (\(C j _) p -> C j p) js ps
       return (mult, constr, js')
 
-partitions :: Int -> Int -> [[Int]]
-partitions k 0 = [[]]
-partitions k n = do
-  p <- [0 .. k]
-  (p :) <$> partitions (k - p) (n - 1)
+type Oracle = HashMap C Double
 
--- | Multinomial coefficient.
-multinomial :: Int -> [Int] -> Integer
-multinomial n [] = 1
-multinomial n (p : ps) = binomial n p * multinomial (n - p) ps
-
--- | Binomial coefficient.
-binomial :: Int -> Int -> Integer
-binomial = \n k -> pascal !! n !! k
+makeOracle :: DataDef -> TypeRep -> Int -> Oracle
+makeOracle dd@DataDef{..} t size =
+  seq v
+  HashMap.fromList
+    [ (c, (v ! 0) ^ (order #! ix c) * eval (v !) e)
+    | X j := e <- es, let c = dd ?! j ]
   where
-    pascal = [1] : fmap nextRow pascal
-    nextRow r = zipWith (+) (0 : r) (r ++ [0])
-
-{-
-
-indexH :: H -> Index
-indexH = mapAccumL (\i _ -> (i + 1, i + 1)) 0
-
-(?), (?.) :: Index -> TypeRep -> Int
-
--- | Index of @C(x)@.
-(_, h) ? t = h HashMap.! t
-
--- | Index of @C'(x)@.
-(n, h) ?. t = h HashMap.! t + n
-
-toEquations :: Index -> H -> [Equation]
-toEquations ix h = HashMap.toList h >>= \(t, tyDesc) ->
-  let
-    e = toEquation ix t tyDesc
-    e' = toEquation' ix e
-  in
-    [e, e']
+    k = points - 1
+    i = index #! t
+    sz = fromIntegral size * X j := X j'
+      where
+        j = dd ? C i k
+        j' = dd ? C i (k + 1)
+    -- Equations defining C_i(x) for all types with indices i
+    es = fmap (toEquation dd) (HashMap.toList types)
+    -- Use the values of @C_i(x)@ at @x=0@ as the initial vector for the search.
+    initialGuess = vector
+      (1 : [ fromInteger (lCoef #! C i k)
+           | k <- [0 .. points], i <- [1 .. count] ])
+    v = case solveEquations defSolveArgs (sz : es) initialGuess of
+      Nothing -> error "Solution not found."
+      Just v_ | v_ ! 0 < 0 -> error ("Negative solution. " ++ show v_)
+      Just v_ -> v_
 
 -- | Equation defining the generating function @C(x)@ of a type.
 --
--- If it is primitive, @C(x) = 1@ (i.e., its values have size 0).
--- If it is empty, @C(x) = 0@.
-toEquation :: Index -> TypeRep -> (SomeData, [(constr, [TypeRep])]) -> Equation
-toEquation ix t (a_, tyInfo) = (X (ix ? t), eqn tyInfo)
+-- @X (i + k * n)@
+toEquation :: DataDef -> (C, [(Integer, constr, [C])]) -> Equation
+toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
+  X (dd ? c) := rhs tyInfo
   where
-    eqn [] =
-      case a_ of
-        SomeData a ->
-          case (dataTypeRep . dataTypeOf) a of
-            AlgRep _ -> Zero
-            _ -> One
-    eqn xs = X 0 * (sum' . fmap (toProd . snd)) xs
-    toProd = prod' . fmap (\t -> X (ix ? t))
+    rhs [] = case xedni #! i of
+      SomeData a ->
+        case (dataTypeRep . dataTypeOf) a of
+          AlgRep _ -> Zero
+          _ -> primExp
+    rhs tyInfo = (sum' . fmap toProd) tyInfo
+    toProd (w, _, js) =
+      let
+        (e, vs) = mapAccumL (\e c ->
+          (e + order #! ix c, X (dd ? c))) 1 js
+      in fromInteger w * (X 0 ^ (e - order_i)) * prod' vs
+    order_i = order #! i
 
--- | Equation defining the derivative @C'(x) of a type, from that of @C(x)@.
-toEquation' :: Index -> Equation -> Equation
-toEquation' (n, _) (X i, e2) = (X (i+n), e2')
-  where
-    e2' = sum [ d y * differentiate y e2 | y <- (IntSet.toList . collectXs) e2 ]
-    d 0 = 1
-    d i = X (i + n)
-toEquation' _ _ = error "Expected equation produced by toEquation"
-
--- | Compute all generating functions @C(x)@.
-gfEval :: [Equation] -> HashMap Int PowerSeries'
-gfEval es = pss
-  where
-    pss = HashMap.fromList . zip [0 ..] $
-      x 1 : fmap (eval (pss HashMap.!) . snd) es
-
--- | The expected size @n@ of an object produced by a Boltzmann sampler with
--- generating function @C(x)@ is @n = x * C'(x) / C(x)@.
---
--- Given a target n, we want to solve that equation for x.
-sizeEquation :: Index -> TypeRep -> Int -> Equation
-sizeEquation ix t n = (fromIntegral n * X (ix ? t), X 0 * X (ix ?. t))
-
--- | The whole system.
---
--- Since only one equation (the first one) depends on the size parameter, as
--- well as the target type, the others are thunked as soon as the first two
--- parameters are passed to this function.
-sizedSystem :: Index -> H -> TypeRep -> Int -> [Equation]
-sizedSystem ix h = \t n -> sizeEquation ix t n : es
-  where
-    es = toEquations ix h
-
-type Oracle = HashMap Int Double
-
-makeOracle :: H -> Index -> TypeRep -> Int -> Oracle
-makeOracle h ix@(n, _) t size = HashMap.fromList
-  [ (i, (v ! 0) ^ order i * eval (v !) e) | (X i, e) <- c ]
-  where
-    sz = (fromIntegral size * X i, xC')
-      where
-        i = ix ? t
-        j = ix ?. t
-        xC' | order i == 0 = X 0 * X j
-            | otherwise = X j
-    -- Equations defining C_i(x) for all types with indices i
-    c = fmap (uncurry (toEquation ix)) (HashMap.toList h)
-    -- Equations defining derivatives C_i'(x)
-    c' = fmap (toEquation' ix) c
-    -- C_i(x) as power series
-    cPS = gfEval c
-    -- C_i'(x) as power series
-    c'PS = HashMap.fromList $
-      fmap (\i -> (i + n, differentiateSeries (cPS HashMap.! i))) [1 .. n]
-    ps = cPS `HashMap.union` c'PS
-    fps = fmap factor ps
-    order i = fst (fps HashMap.! i)
-    lCoef i =
-      case snd (fps HashMap.! i) of
-        [] -> 0 :: Double
-        a : _ -> fromInteger a
-    -- For @0 < i <= n@, the variable @X i@ in @es@ stands for @C_i(x)/x^k@,
-    -- and @X (i+n)@ for @C_i'(x)/x^(k-1)@, where @k@ is the order of @C_i(x)@.
-    es = fmap cToCOverXn (c ++ c')
-    cToCOverXn (X i, e) = (X i, substAndDivide order (order i) e)
-    cToCOverXn _ = error "This doesn't happen."
-    -- Use the values of @C_i(x)@ at @x=0@ as the initial vector for the search.
-    initialGuess = vector (1 : fmap (\(X i, _) -> lCoef i) es)
-    v = case solveEquations defSolveArgs (sz : es) initialGuess of
-      Nothing -> error "Solution not found."
-      Just v_ -> v_
-
--- | Maps a key representing a type @a@ to a generator @m a@.
-type Generators m = HashMap TypeRep (m Any)
+-- | Maps a key representing a type @a@ (or one of its pointings) to a
+-- generator @m a@.
+type Generators m = HashMap C (m Any)
 
 data PrimRandom m = PrimRandom
   { int :: m Int
@@ -372,11 +302,15 @@ primRandomR intR doubleR = PrimRandom
   getRandom
 
 makeGenerators
-  :: forall m. MonadRandom m => H -> Index -> Oracle -> PrimRandom m
+  :: forall m. Monad m
+  => DataDef -> Oracle
+  -> ((Double, Double) -> m Double) -> PrimRandom m
   -> Generators m
-makeGenerators h ix oracle PrimRandom{..} = generators
+makeGenerators DataDef{..} oracle getRandomR PrimRandom{..} =
+  seq oracle
+  generators
   where
-    f (a_, tyInfo) = case a_ of
+    f (C i _) tyInfo = case xedni #! i of
       SomeData a -> fmap unsafeCoerce $
         case tyInfo of
           [] ->
@@ -390,27 +324,44 @@ makeGenerators h ix oracle PrimRandom{..} = generators
                 fromConstr . mkCharConstr dt <$> char
               AlgRep _ -> error "Cannot generate for empty type."
               NoRep -> error "No representation."
-          _ -> choose (fmap g tyInfo) `fTypeOf` a
-    g :: Data a => (Constr, [TypeRep]) -> (Double, m a)
-    g (constr, ts) = (w, gunfold generate return constr `runReaderT` gs)
+          _ -> choose getRandomR (fmap g tyInfo) `fTypeOf` a
+    g :: Data a => (Integer, Constr, [C]) -> (Double, m a)
+    g (v, constr, js) =
+      ( fromInteger v * w
+      , gunfold generate return constr `runReaderT` gs)
       where
-        gs = fmap (generators HashMap.!) ts
-        w = product $ fmap ((oracle HashMap.!) . (snd ix HashMap.!)) ts
+        gs = fmap (generators #!) js
+        w = product $ fmap (oracle #!) js
     generate :: GUnfold (ReaderT [m Any] m)
     generate rest = ReaderT $ \(g : gs) -> do
       x <- g
       f <- rest `runReaderT` gs
       (return . f . unsafeCoerce) x
-    generators = fmap f h
+    generators = HashMap.mapWithKey f types
 
-(!@) :: (Functor m, Typeable a) => Generators m -> proxy a -> m a
-g !@ a = fmap unsafeCoerce (g HashMap.! typeRep a)
+-- | @makeGenerator a k size@:
+-- Make a random generator of @a@'s type, pointed @k@ times,
+-- with average size @size@.
+makeGenerator :: (Data a, MonadRandom m) => a -> Int -> Int -> m a
+makeGenerator a k size =
+  fmap unsafeCoerce (generators #! C (index dd #! t) k)
+  where
+    dd = iterate point (collectTypes a) !! (k + 1)
+    t = typeRep [a]
+    oracle = makeOracle dd t size
+    generators = makeGenerators dd oracle getRandomR defPrimRandom
+
+-- | Type annotation. The produced value should not be evaluated.
+ofType :: (?loc :: CallStack) => (b -> a) -> b
+ofType _ = error
+  ("ofType: this should not be evaluated.\n" ++ showCallStack ?loc)
 
 fTypeOf :: f a -> a -> f a
 fTypeOf = const
 
-choose :: MonadRandom m => [(Double, m a)] -> m a
-choose as = do
+choose :: Monad m
+  => ((Double, Double) -> m Double) -> [(Double, m a)] -> m a
+choose getRandomR as = do
   x <- getRandomR (0, total)
   select x as
   where
@@ -420,49 +371,28 @@ choose as = do
       | otherwise = select (x - w) as
     select _ _ = error "Exhausted choices."
 
-makeGenerator :: (Data a, MonadRandom m) => a -> Int -> m a
-makeGenerator a size = fmap unsafeCoerce (generators HashMap.! t)
-  where
-    h = collectTypes a
-    ix = indexH h
-    t = typeRep [a]
-    oracle = makeOracle h ix t size
-    generators = makeGenerators h ix oracle defPrimRandom
-
--- | > substAndDivide p n e
---
--- Substitute @(X i)@ with @(X 0 ^ p i * X i)@ for @i > 0@, and divide the
--- result (assumed to be divisible) by @(X 0 ^ n)@.
-substAndDivide :: (Int -> Int) -> Int -> Exp -> Exp
-substAndDivide p n e = X 0 ^ (m - n) * e'
-  where
-    (m, e') = subst p e
-
--- | Substitute as explained for @substAndDivide@ and factor by @(X 0)@,
--- returning the exponent of the factored out power of @(X 0)@.
-subst :: (Int -> Int) -> Exp -> (Int, Exp)
-subst _ (X 0) = (1, 1)
-subst p x@(X i) = (p i, x)
-subst _ x@(Constant _) = (0, x)
-subst p (Prod xs) = (sum ns, prod' ys)
-  where
-    (ns, ys) = (unzip . fmap (subst p)) xs
-subst p (Sum xs) = (m, sum' ys)
-  where
-    (m, ys) = mapAccumL (\m' x ->
-      let (m'', y) = subst p x
-      in (min m'' m', X 0 ^ (m'' - m) * y)) (maxBound :: Int) xs
--}
-
-(.>) :: Functor f => f a -> (a -> b) -> f b
-(.>) = flip fmap
-
-(#!) :: (?loc :: CallStack, Eq k, _)
+(#!) :: (?loc :: CallStack, Eq k, Hashable k, Show k)
   => HashMap k v -> k -> v
-h #! k = HashMap.lookupDefault e k h
-  where e = error ("Data.HashMap.(!): key not found\n" ++ showCallStack ?loc)
+h #! k = HashMap.lookupDefault (e ?loc) k h
+  where
+    e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc ++ "\n" ++ show k)
 
--- | Type annotation. The produced value should not be evaluated.
-ofType :: (?loc :: CallStack) => (b -> a) -> b
-ofType _ = error
-  ("ofType: this should not be evaluated.\n" ++ showCallStack ?loc)
+-- | @partitions k n@: lists of non-negative integers of length @n@ with sum
+-- less than or equal to @k@.
+partitions :: Int -> Int -> [[Int]]
+partitions _ 0 = [[]]
+partitions k n = do
+  p <- [0 .. k]
+  (p :) <$> partitions (k - p) (n - 1)
+
+-- | Multinomial coefficient.
+multinomial :: Int -> [Int] -> Integer
+multinomial _ [] = 1
+multinomial n (p : ps) = binomial n p * multinomial (n - p) ps
+
+-- | Binomial coefficient.
+binomial :: Int -> Int -> Integer
+binomial = \n k -> pascal !! n !! k
+  where
+    pascal = [1] : fmap nextRow pascal
+    nextRow r = zipWith (+) (0 : r) (r ++ [0])

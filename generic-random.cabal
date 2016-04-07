@@ -23,6 +23,7 @@ library
     ghc-prim,
     generic-deriving,
     containers,
+    hashable,
     unordered-containers,
     hmatrix,
     vector,

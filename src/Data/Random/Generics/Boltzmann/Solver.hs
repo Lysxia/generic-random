@@ -89,11 +89,14 @@ collectXs (Sum xs) = (IntSet.unions . fmap collectXs) xs
 collectXs (Prod xs) = (IntSet.unions . fmap collectXs) xs
 
 -- | e1 == e2, also e1 - e2 == 0
-type Equation = (Exp, Exp)
+data Equation = Exp := Exp
+  deriving (Eq, Ord, Show)
+
+infix 4 :=
 
 -- Evaluate the difference of expressions.
 evalDelta :: Vector R -> Equation -> R
-evalDelta x (e1, e2) = ((-) `on` eval (x !)) e1 e2
+evalDelta x (e1 := e2) = ((-) `on` eval (x !)) e1 e2
 
 evalDeltas :: Vector R -> [Equation] -> Vector R
 evalDeltas x = vector . fmap (evalDelta x)
@@ -101,7 +104,7 @@ evalDeltas x = vector . fmap (evalDelta x)
 -- Evaluate the jacobian of the differences of expressions [e1i - e2i | i]
 deltaJacobian :: [Equation] -> [[Equation]]
 deltaJacobian es =
-    [ [ (d i e1, d i e2) | i <- [0 .. n-1] ] | (e1, e2) <- es ]
+    [ [ d i e1 := d i e2 | i <- [0 .. n-1] ] | e1 := e2 <- es ]
   where n = length es ; d = differentiate
 
 evalDeltaJacobian :: Vector R -> [[Equation]] -> Matrix R
@@ -113,7 +116,7 @@ data SolveArgs = SolveArgs
   } deriving (Eq, Ord, Show)
 
 defSolveArgs :: SolveArgs
-defSolveArgs = SolveArgs 1e-8 100
+defSolveArgs = SolveArgs 1e-8 20
 
 solve
   :: SolveArgs
@@ -127,10 +130,9 @@ solve SolveArgs{..} f jacobian = newton numIterations
     newton n x =
       let y = f x
       in if norm_Inf y > accuracy then
-        newton (n - 1) (g (x - jacobian x <\> y))
+        newton (n - 1) (x - jacobian x <\> y)
       else
         Just x
-    g = cmap (max 0)
 
 solveEquations
   :: SolveArgs
