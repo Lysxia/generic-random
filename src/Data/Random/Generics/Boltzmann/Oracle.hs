@@ -19,49 +19,68 @@ import Numeric.LinearAlgebra ( (!), vector )
 import Unsafe.Coerce
 import Data.Random.Generics.Boltzmann.Solver
 
+-- | @makeGenerator a k size@:
+-- Make a random generator of @a@'s type, pointed @k@ times,
+-- with average size @size@.
+makeGenerator :: (Data a, MonadRandom m) => a -> Int -> Int -> m a
+makeGenerator a k size =
+  fmap unsafeCoerce (generators #! C (index dd #! t) k)
+  where
+    dd = iterate point (collectTypes a) !! (k + 1)
+    -- We need the next pointing to capture the average size in an equation.
+    t = typeRep [a]
+    oracle = makeOracle dd t size
+    generators = makeGenerators dd oracle getRandomR defPrimRandom
+
 data SomeData where
   SomeData :: Data a => a -> SomeData
 
 instance Show SomeData where
   show _ = "_"
 
--- | Map every type to its constructors, annotated with the types of their fields.
+-- | We build a dictionary which reifies type information in order to
+-- create a Boltzmann generator.
 --
--- Primitive types and empty types are mapped to an empty constructor list, and
--- can be distinguished using @Data.Data.dataTypeRep@ on the attached
--- @SomeData@.
---
--- We map types to integers for more efficient and practical indexing.
--- The first component @n@ is the total number of types present.
+-- We denote by @n@ (or 'count') the number of types in the dictionary.
 --
 -- Every type has an index @1 <= i <= n@; the variable @X i@ represents its
 -- generating function @C_i(x)@, and @X (i + k*n)@ the GF of its @k@-th
--- "pointing" @C^(k)(x)@: @C^(k+1)(x) = x * C^(k)'(x)@ where @C^(k)'@ is the
--- derivative of @C^(k)@.
+-- "pointing" @C_i[k](x)@: we have
+--
+-- @
+--   C_i[0](x) = C_i(x)
+--   C_i[k+1](x) = x * C_i[k]'(x)
+-- @
+--
+-- where @C_i[k]'@ is the derivative of @C_i[k]@. See also 'point'.
 --
 -- @X 0@ is the parameter @x@ of the generating functions.
 --
--- The /leading coefficient/ of a power series is its first non-zero
--- coefficient.
+-- The /order/ of a power series is the index of the first non-zero
+-- coefficient, called the /leading coefficient/.
 
 data DataDef = DataDef
   { count :: Int -- ^ Number of registered types
   , points :: Int -- ^ Number of iterations of the pointing operation
-  , index :: HashMap TypeRep Int -- ^ Map from types to integers
-  , xedni :: HashMap Int SomeData -- ^ Inverse map from index to types
+  , index :: HashMap TypeRep Int -- ^ Map from types to indices
+  , xedni :: HashMap Int SomeData -- ^ Inverse map from indices to types
   , types :: HashMap C [(Integer, Constr, [C])]
   -- ^ Structure of types and their pointings (up to @points@)
   --
+  -- Primitive types and empty types are mapped to an empty constructor list, and
+  -- can be distinguished using @Data.Data.dataTypeRep@ on the attached
+  -- @SomeData@.
+  --
   -- The integer is a multiplicity which can be > 1 for pointings.
   , order :: HashMap Int Int
-  -- ^ Orders of the generating functions @C_i(x)@: smallest size of
+  -- ^ Orders of the generating functions @C_i[k](x)@: smallest size of
   -- objects of a given type.
   , lCoef :: HashMap C Integer
   -- ^ Leading coefficients: number of objects of smallest size.
   } deriving Show
 
 -- | A pair @C i k@ represents the @k@-th "pointing" of the type at index @i@,
--- with generating function @C_i^(k)(x)@.
+-- with generating function @C_i[k](x)@.
 data C = C Int Int
   deriving (Eq, Ord, Show, Generic)
 
@@ -181,6 +200,7 @@ minSum = foldl minPlus (maxBound, 0)
 -- | Pointing operation.
 --
 -- Populates a @DataDef@ with one more level of pointings.
+-- ('collectTypes' produces a dictionary at level 0.)
 --
 -- The "pointing" of a type @t@ is a derived type whose values are essentially
 -- values of type @t@, with one of its constructors being "pointed".
@@ -236,8 +256,11 @@ point dd@DataDef{..} = dd
         js' = zipWith (\(C j _) p -> C j p) js ps
       return (mult, constr, js')
 
+-- | An oracle gives the values of the generating functions at some @x@.
 type Oracle = HashMap C Double
 
+-- | Find the value of @x@ such that the average size of the generator is
+-- equal to @size@, and produce the associated oracle.
 makeOracle :: DataDef -> TypeRep -> Int -> Oracle
 makeOracle dd@DataDef{..} t size =
   seq v
@@ -262,9 +285,7 @@ makeOracle dd@DataDef{..} t size =
       Just v_ | v_ ! 0 < 0 -> error ("Negative solution. " ++ show v_)
       Just v_ -> v_
 
--- | Equation defining the generating function @C(x)@ of a type.
---
--- @X (i + k * n)@
+-- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
 toEquation :: DataDef -> (C, [(Integer, constr, [C])]) -> Equation
 toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
   X (dd ? c) := rhs tyInfo
@@ -286,6 +307,7 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
 -- generator @m a@.
 type Generators m = HashMap C (m Any)
 
+-- | Dictionaries for random primitive values
 data PrimRandom m = PrimRandom
   { int :: m Int
   , double :: m Double
@@ -301,6 +323,7 @@ primRandomR intR doubleR = PrimRandom
   (getRandomR doubleR)
   getRandom
 
+-- | Build all involved generators at once.
 makeGenerators
   :: forall m. Monad m
   => DataDef -> Oracle
@@ -338,18 +361,6 @@ makeGenerators DataDef{..} oracle getRandomR PrimRandom{..} =
       f <- rest `runReaderT` gs
       (return . f . unsafeCoerce) x
     generators = HashMap.mapWithKey f types
-
--- | @makeGenerator a k size@:
--- Make a random generator of @a@'s type, pointed @k@ times,
--- with average size @size@.
-makeGenerator :: (Data a, MonadRandom m) => a -> Int -> Int -> m a
-makeGenerator a k size =
-  fmap unsafeCoerce (generators #! C (index dd #! t) k)
-  where
-    dd = iterate point (collectTypes a) !! (k + 1)
-    t = typeRep [a]
-    oracle = makeOracle dd t size
-    generators = makeGenerators dd oracle getRandomR defPrimRandom
 
 -- | Type annotation. The produced value should not be evaluated.
 ofType :: (?loc :: CallStack) => (b -> a) -> b
