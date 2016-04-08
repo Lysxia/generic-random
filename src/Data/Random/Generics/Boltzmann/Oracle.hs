@@ -4,7 +4,6 @@
 module Data.Random.Generics.Boltzmann.Oracle where
 
 import Control.Monad
-import Control.Monad.Random
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Data
@@ -18,19 +17,6 @@ import GHC.Stack ( CallStack, showCallStack )
 import Numeric.LinearAlgebra ( (!), vector )
 import Unsafe.Coerce
 import Data.Random.Generics.Boltzmann.Solver
-
--- | @makeGenerator a k size@:
--- Make a random generator of @a@'s type, pointed @k@ times,
--- with average size @size@.
-makeGenerator :: (Data a, MonadRandom m) => a -> Int -> Int -> m a
-makeGenerator a k size =
-  fmap unsafeCoerce (generators #! C (index dd #! t) k)
-  where
-    dd = iterate point (collectTypes a) !! (k + 1)
-    -- We need the next pointing to capture the average size in an equation.
-    t = typeRep [a]
-    oracle = makeOracle dd t size
-    generators = makeGenerators dd oracle getRandomR defPrimRandom
 
 data SomeData where
   SomeData :: Data a => a -> SomeData
@@ -62,7 +48,7 @@ instance Show SomeData where
 
 data DataDef = DataDef
   { count :: Int -- ^ Number of registered types
-  , points :: Int -- ^ Number of iterations of the pointing operation
+  , points :: Int -- ^ Number of iterations of the pointing operator
   , index :: HashMap TypeRep Int -- ^ Map from types to indices
   , xedni :: HashMap Int SomeData -- ^ Inverse map from indices to types
   , types :: HashMap C [(Integer, Constr, [C])]
@@ -86,16 +72,6 @@ data C = C Int Int
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable C
-
-(?) :: DataDef -> C -> Int
-dd ? C i k = i + k * count dd
-
-ix :: C -> Int
-ix (C i _) = i
-
-(?!) :: DataDef -> Int -> C
-dd ?! j = C (i + 1) k
-  where (k, i) = (j - 1) `divMod` count dd
 
 emptyDataDef :: DataDef
 emptyDataDef = DataDef
@@ -198,7 +174,7 @@ minSum :: (Ord int, Bounded int, Eq integer, Num integer)
   => [(int, integer)] -> (int, integer)
 minSum = foldl minPlus (maxBound, 0)
 
--- | Pointing operation.
+-- | Pointing operator.
 --
 -- Populates a 'DataDef' with one more level of pointings.
 -- ('collectTypes' produces a dictionary at level 0.)
@@ -217,7 +193,7 @@ minSum = foldl minPlus (maxBound, 0)
 --     | Node'0 Tree' Tree -- Point to the left
 --     | Node'1 Tree Tree' -- Point to the right
 --   -- Pointing of the pointing
---   -- Notice that the "points" introduced by both pointing operations
+--   -- Notice that the "points" introduced by both applications of pointing
 --   -- are considered different: exchanging their positions (when different)
 --   -- produces a different tree.
 --   data Tree''
@@ -309,33 +285,28 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
 -- generator @m a@.
 type Generators m = HashMap C (m Any)
 
--- | Dictionaries for random primitive values
+-- | Generators of random primitive values and other useful actions to
+-- inject in our generator.
+--
+-- This allows to remain generic over 'MonadRandom' instances and
+-- 'Test.QuickCheck.Gen'.
 data PrimRandom m = PrimRandom
-  { int :: m Int
+  { incr :: m () -- Called for every constructor
+  , getRandomR_ :: (Double, Double) -> m Double
+  , int :: m Int
   , double :: m Double
   , char :: m Char
   }
 
-defPrimRandom :: MonadRandom m => PrimRandom m
-defPrimRandom = PrimRandom getRandom getRandom getRandom
-
-primRandomR :: MonadRandom m => (Int, Int) -> (Double, Double) -> PrimRandom m
-primRandomR intR doubleR = PrimRandom
-  (getRandomR intR)
-  (getRandomR doubleR)
-  getRandom
-
 -- | Build all involved generators at once.
 makeGenerators
   :: forall m. Monad m
-  => DataDef -> Oracle
-  -> ((Double, Double) -> m Double) -> PrimRandom m
-  -> Generators m
-makeGenerators DataDef{..} oracle getRandomR PrimRandom{..} =
+  => DataDef -> Oracle -> PrimRandom m -> Generators m
+makeGenerators DataDef{..} oracle PrimRandom{..} =
   seq oracle
   generators
   where
-    f (C i _) tyInfo = case xedni #! i of
+    f (C i _) tyInfo = incr >> case xedni #! i of
       SomeData a -> fmap unsafeCoerce $
         case tyInfo of
           [] ->
@@ -349,7 +320,7 @@ makeGenerators DataDef{..} oracle getRandomR PrimRandom{..} =
                 fromConstr . mkCharConstr dt <$> char
               AlgRep _ -> error "Cannot generate for empty type."
               NoRep -> error "No representation."
-          _ -> choose getRandomR (fmap g tyInfo) `fTypeOf` a
+          _ -> frequencyWith getRandomR_ (fmap g tyInfo) `fTypeOf` a
     g :: Data a => (Integer, Constr, [C]) -> (Double, m a)
     g (v, constr, js) =
       ( fromInteger v * w
@@ -364,6 +335,25 @@ makeGenerators DataDef{..} oracle getRandomR PrimRandom{..} =
       (return . f . unsafeCoerce) x
     generators = HashMap.mapWithKey f types
 
+-- * Short operators
+
+(?) :: DataDef -> C -> Int
+dd ? C i k = i + k * count dd
+
+ix :: C -> Int
+ix (C i _) = i
+
+(?!) :: DataDef -> Int -> C
+dd ?! j = C (i + 1) k
+  where (k, i) = (j - 1) `divMod` count dd
+
+getGenerator :: (Functor m, Data a)
+  => DataDef -> Generators m -> proxy a -> Int -> m a
+getGenerator dd generators a k =
+  fmap unsafeCoerce (generators #! C (index dd #! typeRep a) k)
+
+-- * General helper functions
+
 -- | Type annotation. The produced value should not be evaluated.
 ofType :: (?loc :: CallStack) => (b -> a) -> b
 ofType _ = error
@@ -372,9 +362,9 @@ ofType _ = error
 fTypeOf :: f a -> a -> f a
 fTypeOf = const
 
-choose :: Monad m
+frequencyWith :: Monad m
   => ((Double, Double) -> m Double) -> [(Double, m a)] -> m a
-choose getRandomR as = do
+frequencyWith getRandomR as = do
   x <- getRandomR (0, total)
   select x as
   where
