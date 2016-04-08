@@ -6,10 +6,10 @@ Create a sized random generator for almost any type.
 This will only work on types `a` such that:
 
 - they are instances of `Data`;
-- they have a finite set of types which can be types of subterms of values
-  of type `a`;
-- and all of these types have finite values (i.e., values with finitely many
-  constructors).
+- the set of types of subterms of values of type `a` is finite;
+- and all of these types have at least one finite value (i.e., values with
+  finitely many constructors) (otherwise our concept of "size" would not be
+  meaningful).
 
 About the second point, phantom types are not a problem indeed.
 
