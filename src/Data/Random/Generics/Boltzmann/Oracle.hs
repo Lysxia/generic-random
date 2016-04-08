@@ -248,7 +248,7 @@ makeOracle dd@DataDef{..} t size =
   where
     k = points - 1
     i = index #! t
-    sz = fromIntegral size * X j := X j'
+    sz n = fromIntegral n * X j := X j'
       where
         j = dd ? C i k
         j' = dd ? C i (k + 1)
@@ -258,10 +258,17 @@ makeOracle dd@DataDef{..} t size =
     initialGuess = vector
       (1 : [ fromInteger (lCoef #! C i k)
            | k <- [0 .. points], i <- [1 .. count] ])
-    v = case solveEquations defSolveArgs (sz : es) initialGuess of
+    solve n x = solveEquations defSolveArgs (sz n : es) x
+    -- We first solve the system with small sizes in order to build a good
+    -- approximation, and increase the target size progressively. This seems
+    -- to be more robust than solving with the actual size straight away.
+    go n x = case solve (min n size) x of
       Nothing -> error "Solution not found."
-      Just v_ | v_ ! 0 < 0 -> error ("Negative solution. " ++ show v_)
-      Just v_ -> v_
+      Just x' | x' ! 0 < 0 -> error ("Negative solution. " ++ show x')
+      Just x' | n >= size -> x'
+      Just x' -> go (2 * n) x'
+    v | size == 1 = go 1 initialGuess
+      | otherwise = go 2 initialGuess
 
 -- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
 toEquation :: DataDef -> (C, [(Integer, constr, [C])]) -> Equation
