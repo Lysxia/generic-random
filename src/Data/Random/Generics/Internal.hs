@@ -20,9 +20,12 @@ makeGenerator primRandom a k size =
     generators = makeGenerators dd oracle primRandom
 
 ceiledRejectionSampler
-  :: (Data a, Monad m) => PrimRandom m -> proxy a -> Int -> Double -> m a
-ceiledRejectionSampler primRandom a size epsilon =
-  runRejectT' (makeGenerator primRandom' a 0 size)
+  :: (Data a, Monad m) => PrimRandom m
+  -> proxy a -> Int -> Int -> Maybe Double -> m a
+ceiledRejectionSampler primRandom a k size Nothing =
+  makeGenerator primRandom a k size
+ceiledRejectionSampler primRandom a k size (Just epsilon) =
+  runRejectT' (makeGenerator primRandom' a k size)
   where
     primRandom' = ceilPrimRandom maxSize primRandom
     runRejectT' = runRejectT minSize

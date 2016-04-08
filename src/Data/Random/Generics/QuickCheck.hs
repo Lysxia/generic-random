@@ -17,10 +17,15 @@ arbitraryGenerator size = a
 
 -- | 'arbitraryGenerator' with the target type as an argument.
 arbitraryGenerator' :: Data a => proxy a -> Int -> Gen a
-arbitraryGenerator' a size = arbitraryApproxGenerator' a size epsilon
+arbitraryGenerator' a size = arbitraryApproxGenerator a 0 size (Just epsilon)
 
-arbitraryApproxGenerator' :: Data a => proxy a -> Int -> Double -> Gen a
-arbitraryApproxGenerator' = ceiledRejectionSampler arbitraryPrimRandom
+-- | > arbitraryApproxGenerator k n eps :: m a
+--
+-- Boltzmann generator for the @k@-th pointing of type @a@ with average size
+-- @n@ and tolerance @eps@ (or no filtering if @eps = Nothing@).
+arbitraryApproxGenerator
+  :: Data a => proxy a -> Int -> Int -> Maybe Double -> Gen a
+arbitraryApproxGenerator = ceiledRejectionSampler arbitraryPrimRandom
 
 -- * Auxiliary definitions
 

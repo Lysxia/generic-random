@@ -17,11 +17,15 @@ randomGenerator size = a
 
 -- | 'randomGenerator' with the target type as an argument.
 randomGenerator' :: (Data a, MonadRandom m) => proxy a -> Int -> m a
-randomGenerator' a size = randomApproxGenerator' a size epsilon
+randomGenerator' a size = randomApproxGenerator a 0 size (Just epsilon)
 
-randomApproxGenerator'
-  :: (Data a, MonadRandom m) => proxy a -> Int -> Double -> m a
-randomApproxGenerator' = ceiledRejectionSampler randomPrimRandom
+-- | > randomApproxGenerator k n eps :: m a
+--
+-- Boltzmann generator for the @k@-th pointing of type @a@ with average size
+-- @n@ and tolerance @eps@ (or no filtering if @eps = Nothing@).
+randomApproxGenerator
+  :: (Data a, MonadRandom m) => proxy a -> Int -> Int -> Maybe Double -> m a
+randomApproxGenerator = ceiledRejectionSampler randomPrimRandom
 
 -- * Auxiliary definitions
 
