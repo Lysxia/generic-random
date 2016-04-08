@@ -21,20 +21,22 @@ makeGenerator primRandom a k size =
 
 ceiledRejectionSampler
   :: (Data a, Monad m) => PrimRandom m
-  -> proxy a -> Int -> Int -> Maybe Double -> m a
+  -> proxy a -> Int -> Int -> Maybe (Int, Int) -> m a
 ceiledRejectionSampler primRandom a k size Nothing =
   makeGenerator primRandom a k size
-ceiledRejectionSampler primRandom a k size (Just epsilon) =
+ceiledRejectionSampler primRandom a k size (Just (minSize, maxSize)) =
   runRejectT' (makeGenerator primRandom' a k size)
   where
     primRandom' = ceilPrimRandom maxSize primRandom
     runRejectT' = runRejectT minSize
-    maxSize = size + delta
-    minSize = size - delta
-    delta = floor (fromIntegral size * epsilon)
 
 epsilon :: Double
 epsilon = 0.1
+
+tolerance :: Double -> Int -> (Int, Int)
+tolerance epsilon size = (size - delta, size + delta)
+  where
+    delta = floor (fromIntegral size * epsilon)
 
 type RejectT m = StateT Int (MaybeT m)
 
