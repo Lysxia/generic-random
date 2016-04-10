@@ -4,6 +4,7 @@ module Main where
 import Criterion.Main
 import Data.Data
 import Data.Random.Generics
+import Data.Random.Generics.Internal
 import Test.QuickCheck
 
 data T = N T T | L
@@ -20,7 +21,7 @@ rejectT n = arbitraryGenerator n
 
 -- Pointing makes the generator more precise.
 pointT :: Int -> Gen T
-pointT n = arbitraryApproxGenerator [] 1 n (Just 0.1)
+pointT n = arbitraryApproxGenerator [] 1 n (Just (tolerance epsilon n))
 
 benchPoint, benchReject :: Int -> Benchmark
 benchPoint n = bench ("point " ++ show n) $ whnfGen (pointT n)
