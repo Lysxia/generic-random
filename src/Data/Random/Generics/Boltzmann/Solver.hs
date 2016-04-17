@@ -1,39 +1,54 @@
 -- | Solve systems of equations
 
-{-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase, PatternSynonyms, RecordWildCards #-}
 module Data.Random.Generics.Boltzmann.Solver where
 
-import Control.Applicative
 import Data.Data
 import Data.Function
-import Data.List
-import Data.IntSet ( IntSet )
-import qualified Data.IntSet as IntSet
-import Generics.Deriving ( Generic )
 import Numeric.LinearAlgebra
 
-data Exp
+data Exp a
   = X Int
-  | Constant Integer
-  | Sum [Exp]
-  | Prod [Exp]
-  deriving (Eq, Ord, Show, Data, Generic, Typeable)
+  | Constant a
+  | Exp a :+: Exp a
+  | Exp a :*: Exp a
+  deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-instance Num Exp where
-  a + b = sum' [a, b]
-  a * b = prod' [a, b]
+instance (Eq a, Num a) => Num (Exp a) where
+  Zero + b = b
+  a + Zero = a
+  Constant m + Constant n = Constant (m + n)
+  Constant m + (Constant n :+: b) = Constant (m + n) :+: b
+  a@(Constant _) + b = a :+: b
+  a + b@(Constant _) = b :+: a
+  (c@(Constant _) :+: a) + b = c + (a + b)
+  a + (c@(Constant _) :+: b) = c :+: (a :+: b)
+  a + b = a :+: b
+
+  Zero * _ = Zero
+  _ * Zero = Zero
+  One * b = b
+  a * One = a
+  Constant m * Constant n = Constant (m * n)
+  Constant m * (Constant n :*: b) = Constant (m * n) :*: b
+  a@(Constant _) * b = a :*: b
+  a * b@(Constant _) = b :*: a
+  (c@(Constant _) :*: a) * b = c * (a * b)
+  a * (c@(Constant _) :*: b) = c :*: (a :*: b)
+  a * b = a :*: b
+
   (-) = error "(-) is not defined for Exp."
   negate = error "negate is not defined for Exp."
   abs = id
-  signum x | isZero x = Zero
-  signum x = x
-  fromInteger = Constant
+  signum x | isZero x = 0
+  signum _ = 1
+  fromInteger = Constant . fromInteger
 
 pattern Zero = Constant 0
 pattern One = Constant 1
 
-isZero, isOne :: Exp -> Bool
+isZero, isOne :: (Eq a, Num a) => Exp a -> Bool
 
 isZero Zero = True
 isZero _ = False
@@ -41,73 +56,39 @@ isZero _ = False
 isOne One = True
 isOne _ = False
 
-eval :: Num a => (Int -> a) -> Exp -> a
+eval :: Num a => (Int -> a) -> Exp a -> a
 eval x (X i) = x i
-eval _ (Constant n) = fromInteger n
-eval x (Sum xs) = sum (fmap (eval x) xs)
-eval x (Prod xs) = product (fmap (eval x) xs)
+eval _ (Constant a) = a
+eval x (a :+: b) = eval x a + eval x b
+eval x (a :*: b) = eval x a * eval x b
 
-differentiate :: Int -> Exp -> Exp
+differentiate :: (Eq a, Num a) => Int -> Exp a -> Exp a
 differentiate i (X j) | i == j = One
 differentiate _ (X _) = Zero
 differentiate _ (Constant _) = Zero
-differentiate i (Sum xs) = sum' $ fmap (differentiate i) xs
-differentiate i (Prod xs) = sum' $
-  [ prod' (differentiate i x : xs') | (x, xs') <- selectFrom xs ]
-
-selectFrom :: [a] -> [(a, [a])]
-selectFrom xs =
-  [ (x, a ++ b) | (a, x : b) <- (liftA2 zip inits tails) xs ]
-
-prod' :: [Exp] -> Exp
-prod' = prod_ 1 []
-  where
-    prod_ 0 _ _ = Zero
-    prod_ n xs' (Prod xs0 : xs) = prod_ n xs' (xs0 ++ xs)
-    prod_ n xs' (Constant m : xs) = prod_ (n * m) xs' xs
-    prod_ n xs' (x : xs) = prod_ n (x : xs') xs
-    prod_ n [] [] = Constant n
-    prod_ 1 [x] [] = x
-    prod_ 1 xs' [] = Prod (reverse xs')
-    prod_ n xs' [] = Prod (Constant n : reverse xs')
-
-sum' :: [Exp] -> Exp
-sum' = sum_ 0 []
-  where
-    sum_ n xs' (Sum xs0 : xs) = sum_ n xs' (xs0 ++ xs)
-    sum_ n xs' (Constant m : xs) = sum_ (n + m) xs' xs
-    sum_ n xs' (x : xs) = sum_ n (x : xs') xs
-    sum_ n [] [] = Constant n
-    sum_ 0 [x] [] = x
-    sum_ 0 xs' [] = Sum (reverse xs')
-    sum_ n xs' [] = Sum (Constant n : reverse xs')
-
-collectXs :: Exp -> IntSet
-collectXs (X i) = IntSet.singleton i
-collectXs (Constant _) = IntSet.empty
-collectXs (Sum xs) = (IntSet.unions . fmap collectXs) xs
-collectXs (Prod xs) = (IntSet.unions . fmap collectXs) xs
+differentiate i (a :+: b) = differentiate i a + differentiate i b
+differentiate i (a :*: b) = (differentiate i a * b) + (a * differentiate i b)
 
 -- | e1 == e2, also e1 - e2 == 0
-data Equation = Exp := Exp
+data Equation a = Exp a := Exp a
   deriving (Eq, Ord, Show)
 
 infix 4 :=
 
 -- Evaluate the difference of expressions.
-evalDelta :: Vector R -> Equation -> R
+evalDelta :: Vector R -> Equation R -> R
 evalDelta x (e1 := e2) = ((-) `on` eval (x !)) e1 e2
 
-evalDeltas :: Vector R -> [Equation] -> Vector R
+evalDeltas :: Vector R -> [Equation R] -> Vector R
 evalDeltas x = vector . fmap (evalDelta x)
 
 -- Evaluate the jacobian of the differences of expressions [e1i - e2i | i]
-deltaJacobian :: [Equation] -> [[Equation]]
+deltaJacobian :: (Eq a, Num a) => [Equation a] -> [[Equation a]]
 deltaJacobian es =
     [ [ d i e1 := d i e2 | i <- [0 .. n-1] ] | e1 := e2 <- es ]
   where n = length es ; d = differentiate
 
-evalDeltaJacobian :: Vector R -> [[Equation]] -> Matrix R
+evalDeltaJacobian :: Vector R -> [[Equation R]] -> Matrix R
 evalDeltaJacobian x = fromLists . (fmap . fmap) (evalDelta x)
 
 data SolveArgs = SolveArgs
@@ -127,16 +108,17 @@ solve
 solve SolveArgs{..} f jacobian = newton numIterations
   where
     newton 0 _ = Nothing
-    newton n x =
-      let y = f x
-      in if norm_Inf y > accuracy then
-        newton (n - 1) (x - jacobian x <\> y)
-      else
-        Just x
+    newton n x
+      | norm_y == 1/0 = Nothing
+      | norm_y > accuracy = newton (n - 1) (x - jacobian x <\> y)
+      | otherwise = Just x
+      where
+        norm_y = norm_Inf y
+        y = f x
 
 solveEquations
   :: SolveArgs
-  -> [Equation]
+  -> [Equation R]
   -> Vector R -- Initial guess
   -> Maybe (Vector R)
 solveEquations args es = solve args f jacobian
@@ -147,7 +129,7 @@ solveEquations args es = solve args f jacobian
 
 solveEquations'
   :: SolveArgs
-  -> [Equation]
+  -> [Equation R]
   -> Vector R
 solveEquations' args es = retry [0, 0.1 .. 1]
   where

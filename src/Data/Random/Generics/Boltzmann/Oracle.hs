@@ -98,8 +98,8 @@ primOrder = 1
 primlCoef :: Integer
 primlCoef = 1
 
-primExp :: Exp
-primExp = fromIntegral primlCoef * X 0 ^ primOrder
+primExp :: (Eq a, Num a) => Exp a
+primExp = fromInteger primlCoef * X 0 ^ primOrder
 
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
@@ -271,7 +271,8 @@ makeOracle dd@DataDef{..} t size =
       | otherwise = go 2 initialGuess
 
 -- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
-toEquation :: DataDef -> (C, [(Integer, constr, [C])]) -> Equation
+toEquation
+  :: (Eq a, Num a) => DataDef -> (C, [(Integer, constr, [C])]) -> Equation a
 toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
   X (dd ? c) := rhs tyInfo
   where
@@ -280,12 +281,12 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
         case (dataTypeRep . dataTypeOf) a of
           AlgRep _ -> Zero
           _ -> primExp
-    rhs tyInfo = (sum' . fmap toProd) tyInfo
+    rhs tyInfo = (sum . fmap toProd) tyInfo
     toProd (w, _, js) =
       let
         (e, vs) = mapAccumL (\e c ->
           (e + order #! ix c, X (dd ? c))) 1 js
-      in fromInteger w * (X 0 ^ (e - order_i)) * prod' vs
+      in fromInteger w * (X 0 ^ (e - order_i)) * product vs
     order_i = order #! i
 
 -- | Maps a key representing a type @a@ (or one of its pointings) to a
