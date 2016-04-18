@@ -6,15 +6,16 @@ module Data.Random.Generics.Boltzmann.Oracle where
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.AEq ( (~==) )
 import Data.Data
-import Data.Hashable
+import Data.Hashable ( Hashable )
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Traversable
+import Data.Maybe ( fromJust )
+import qualified Data.Vector.Storable as V
 import GHC.Generics ( Generic )
 import GHC.Prim ( Any )
 import GHC.Stack ( CallStack, showCallStack )
-import Numeric.LinearAlgebra ( (!), vector )
 import Unsafe.Coerce
 import Data.Random.Generics.Boltzmann.Solver
 
@@ -30,9 +31,9 @@ instance Show SomeData where
 --
 -- We denote by @n@ (or 'count') the number of types in the dictionary.
 --
--- Every type has an index @1 <= i <= n@; the variable @X i@ represents its
+-- Every type has an index @0 <= i < n@; the variable @X i@ represents its
 -- generating function @C_i(x)@, and @X (i + k*n)@ the GF of its @k@-th
--- "pointing" @C_i[k](x)@: we have
+-- "pointing" @C_i[k](x)@; we have
 --
 -- @
 --   C_i[0](x) = C_i(x)
@@ -41,10 +42,10 @@ instance Show SomeData where
 --
 -- where @C_i[k]'@ is the derivative of @C_i[k]@. See also 'point'.
 --
--- @X 0@ is the parameter @x@ of the generating functions.
+-- @X (-1)@ is the parameter @x@ of the generating functions.
 --
--- The /order/ of a power series is the index of the first non-zero
--- coefficient, called the /leading coefficient/.
+-- The /order/ (or /valuation/) of a power series is the index of the first
+-- non-zero coefficient, called the /leading coefficient/.
 
 data DataDef = DataDef
   { count :: Int -- ^ Number of registered types
@@ -110,9 +111,9 @@ collectTypesM a = do
   DataDef{..} <- get
   case HashMap.lookup t index of
     Nothing -> do
-      let i = count + 1
+      let i = count
       modify $ \dd -> dd
-        { count = i
+        { count = i + 1
         , index = HashMap.insert t i index
         , xedni = HashMap.insert i (SomeData a) xedni
         , order = HashMap.insert i (error "Unknown order") order
@@ -219,8 +220,8 @@ minSum = foldl minPlus (maxBound, 0)
 point :: DataDef -> DataDef
 point dd@DataDef{..} = dd
   { points = points'
-  , types = foldl g types [1 .. count]
-  , lCoef = foldl f lCoef [1 .. count]
+  , types = foldl g types [0 .. count-1]
+  , lCoef = foldl f lCoef [0 .. count-1]
   } where
     points' = points + 1
     f lCoef i = HashMap.insert (C i points') (lCoef' i) lCoef
@@ -238,37 +239,36 @@ point dd@DataDef{..} = dd
 type Oracle = HashMap C Double
 
 -- | Find the value of @x@ such that the average size of the generator is
--- equal to @size@, and produce the associated oracle.
-makeOracle :: DataDef -> TypeRep -> Int -> Oracle
-makeOracle dd@DataDef{..} t size =
+-- equal to @size@, and produce the associated oracle. If the size is
+-- @Nothing@, find the radius of convergence.
+--
+-- The search evaluates the generating functions for some values of @x@ in
+-- order to run a binary search. The evaluator is implemented using Newton's
+-- method, the convergence of which has been shown for relevant systems in
+-- /Boltzmann Oracle for Combinatorial Systems/,
+-- C. Pivoteau, B. Salvy, M. Soria.
+makeOracle :: DataDef -> TypeRep -> Maybe Int -> Oracle
+makeOracle dd@DataDef{..} t size' =
   seq v
-  HashMap.fromList
-    [ (c, (v ! 0) ^ (order #! ix c) * eval (v !) e)
-    | X j := e <- es, let c = dd ?! j ]
+  HashMap.fromList (zip cs (V.toList v))
   where
+    cs = flip C <$> [0 .. points] <*> [0 .. count - 1]
+    m = count * (points + 1)
     k = points - 1
     i = index #! t
-    sz n = fromIntegral n * X j := X j'
+    checkSize (Just size) (Just ys) = fromIntegral size >= size_
       where
+        size_ = ys ! j' / ys ! j
         j = dd ? C i k
         j' = dd ? C i (k + 1)
+    checkSize Nothing (Just _) = True
+    checkSize _ Nothing = False
     -- Equations defining C_i(x) for all types with indices i
     es = fmap (toEquation dd) (HashMap.toList types)
-    -- Use the values of @C_i(x)@ at @x=0@ as the initial vector for the search.
-    initialGuess = vector
-      (1 : [ fromInteger (lCoef #! C i k)
-           | k <- [0 .. points], i <- [1 .. count] ])
-    solve n x = solveEquations defSolveArgs (sz n : es) x
-    -- We first solve the system with small sizes in order to build a good
-    -- approximation, and increase the target size progressively. This seems
-    -- to be more robust than solving with the actual size straight away.
-    go n x = case solve (min n size) x of
-      Nothing -> error "Solution not found."
-      Just x' | x' ! 0 < 0 -> error ("Negative solution. " ++ show x')
-      Just x' | n >= size -> x'
-      Just x' -> go (2 * n) x'
-    v | size == 1 = go 1 initialGuess
-      | otherwise = go 2 initialGuess
+    eval' x = solveEquations defSolveArgs es' (V.replicate m 0)
+      where
+        es' = fmap (\(y := fx) -> y := subst1 (-1) x fx) es
+    v = fromJust (search eval' (checkSize size'))
 
 -- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
 toEquation
@@ -281,13 +281,27 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
         case (dataTypeRep . dataTypeOf) a of
           AlgRep _ -> Zero
           _ -> primExp
-    rhs tyInfo = (sum . fmap toProd) tyInfo
-    toProd (w, _, js) =
-      let
-        (e, vs) = mapAccumL (\e c ->
-          (e + order #! ix c, X (dd ? c))) 1 js
-      in fromInteger w * (X 0 ^ (e - order_i)) * product vs
-    order_i = order #! i
+    rhs tyInfo = X (-1) * (sum . fmap toProd) tyInfo
+    toProd (w, _, js) = fromInteger w * product [ X (dd ? j) | j <- js ]
+
+-- | Assuming @p . f@ is satisfied only for positive values in some interval
+-- @(0, r]@, find @f r@.
+search :: (Double -> a) -> (a -> Bool) -> a
+search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
+  where
+    search' y (x : xs@(x' : _))
+      | p y' = search' y' xs
+      | otherwise = search'' y x x'
+      where y' = f x'
+    search' _ _ = error "Solution not found. Uncontradictable predicate?"
+    search'' y x x'
+      | x ~== x' = y
+      | p y_ = search'' y_ x_ x'
+      | otherwise = search'' y x x_
+      where
+        x_ = (x + x') / 2
+        y_ = f x_
+    e0 = error "Solution not found. Unsatisfiable predicate?"
 
 -- | Maps a key representing a type @a@ (or one of its pointings) to a
 -- generator @m a@.
@@ -352,8 +366,8 @@ ix :: C -> Int
 ix (C i _) = i
 
 (?!) :: DataDef -> Int -> C
-dd ?! j = C (i + 1) k
-  where (k, i) = (j - 1) `divMod` count dd
+dd ?! j = C i k
+  where (k, i) = j `divMod` count dd
 
 getGenerator :: (Functor m, Data a)
   => DataDef -> Generators m -> proxy a -> Int -> m a
@@ -387,6 +401,11 @@ frequencyWith getRandomR as = do
 h #! k = HashMap.lookupDefault (e ?loc) k h
   where
     e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc)
+
+(!) :: (?loc :: CallStack, V.Storable a)
+  => V.Vector a -> Int -> a
+v ! i | 0 <= i && i < V.length v = v V.! i
+_ ! _ = error ("Vector.(!): index out of bounds\n" ++ showCallStack ?loc)
 
 -- | @partitions k n@: lists of non-negative integers of length @n@ with sum
 -- less than or equal to @k@.

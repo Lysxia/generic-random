@@ -21,7 +21,7 @@ rejectT n = arbitraryGenerator n
 
 -- Pointing makes the generator more precise.
 pointT :: Int -> Gen T
-pointT n = arbitraryApproxGenerator [] 1 n (Just (tolerance epsilon n))
+pointT n = arbitraryApproxGenerator [] 1 (Just n) (Just (tolerance epsilon n))
 
 benchPoint, benchReject :: Int -> Benchmark
 benchPoint n = bench ("point " ++ show n) $ whnfGen (pointT n)

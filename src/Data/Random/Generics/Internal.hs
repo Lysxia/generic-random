@@ -9,23 +9,23 @@ import Data.Random.Generics.Boltzmann.Oracle
 -- * Helper functions
 
 makeGenerator :: (Data a, Monad m)
-  => PrimRandom m -> proxy a -> Int -> Int -> m a
-makeGenerator primRandom a k size =
+  => PrimRandom m -> proxy a -> Int -> Maybe Int -> m a
+makeGenerator primRandom a k size' =
   getGenerator dd generators a k
   where
     dd = iterate point (collectTypes (undefined `asProxyTypeOf` a)) !! (k + 1)
     -- We need the next pointing to capture the average size in an equation.
     t = typeRep a
-    oracle = makeOracle dd t size
+    oracle = makeOracle dd t size'
     generators = makeGenerators dd oracle primRandom
 
 ceiledRejectionSampler
   :: (Data a, Monad m) => PrimRandom m
-  -> proxy a -> Int -> Int -> Maybe (Int, Int) -> m a
-ceiledRejectionSampler primRandom a k size Nothing =
-  makeGenerator primRandom a k size
-ceiledRejectionSampler primRandom a k size (Just (minSize, maxSize)) =
-  runRejectT' (makeGenerator primRandom' a k size)
+  -> proxy a -> Int -> Maybe Int -> Maybe (Int, Int) -> m a
+ceiledRejectionSampler primRandom a k size' Nothing =
+  makeGenerator primRandom a k size'
+ceiledRejectionSampler primRandom a k size' (Just (minSize, maxSize)) =
+  runRejectT' (makeGenerator primRandom' a k size')
   where
     primRandom' = ceilPrimRandom maxSize primRandom
     runRejectT' = runRejectT minSize
@@ -33,6 +33,7 @@ ceiledRejectionSampler primRandom a k size (Just (minSize, maxSize)) =
 epsilon :: Double
 epsilon = 0.1
 
+-- | > (size * (1 - epsilon), size * (1 + epsilon))
 tolerance :: Double -> Int -> (Int, Int)
 tolerance epsilon size = (size - delta, size + delta)
   where

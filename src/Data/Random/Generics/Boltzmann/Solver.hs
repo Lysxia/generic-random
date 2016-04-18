@@ -62,6 +62,18 @@ eval _ (Constant a) = a
 eval x (a :+: b) = eval x a + eval x b
 eval x (a :*: b) = eval x a * eval x b
 
+substitute :: (Int -> Exp a) -> Exp a -> Exp a
+substitute f (X j) = f j
+substitute _ a@(Constant _) = a
+substitute f (a :+: b) = substitute f a :+: substitute f b
+substitute f (a :*: b) = substitute f a :*: substitute f b
+
+subst1 :: Int -> a -> Exp a -> Exp a
+subst1 i x = substitute f
+  where
+    f j | i == j = Constant x
+    f j = X j
+
 differentiate :: (Eq a, Num a) => Int -> Exp a -> Exp a
 differentiate i (X j) | i == j = One
 differentiate _ (X _) = Zero
