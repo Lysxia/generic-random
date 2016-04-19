@@ -16,8 +16,6 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Data.Random.Generics
-    Data.Random.Generics.QuickCheck
-    Data.Random.Generics.Random
     Data.Random.Generics.Internal
     Data.Random.Generics.Boltzmann.Oracle
     Data.Random.Generics.Boltzmann.Solver
@@ -56,6 +54,7 @@ benchmark bench-binarytree
   build-depends:
     base,
     criterion,
+    deepseq,
     QuickCheck,
     generic-random
 

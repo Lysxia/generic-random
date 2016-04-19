@@ -11,22 +11,33 @@ This will only work on types `a` such that:
   finitely many constructors) (otherwise our concept of "size" would not be
   meaningful).
 
-About the second point, phantom types are not a problem indeed.
+The size of a value is its number of constructors.
 
-An example of problematic type is:
+The desired average `size` must be reachable, i.e., be larger than the smallest
+value of type `a`, and smaller than the largest value of type `a` (when there
+is one).
+
+Examples of problematic types
+-----------------------------
 
     data E a = L a | R (E [a])
 
-Indeed, every type of the form `[[...[[a]]...]]` occurs after sufficiently
-many unwrappings of `R`'s.
+Indeed, in `E`, every type of the form `[[...[[a]]...]]` occurs after
+sufficiently many unwrappings of `R`'s.
 
-The size of a value is its number of constructors.
+    data I = C I
 
-The desired average `size` must be reachable, i.e., be larger than (or equal
-to) the smallest value of type `a`, and smaller than (or equal to) the
-largest value of type `a` (when there is one).
+If we ignore bottoms, the only value of type `I` is an infinite stack of `C`
+constructors.
 
-Reference
----------
+References
+----------
 
-- [Boltzmann Samplers for the Random Generation of Combinatorial Structures](http://algo.inria.fr/flajolet/Publications/DuFlLoSc04.pdf).
+- The core theory of Boltzmann samplers is described in
+  [Boltzmann Samplers for the Random Generation of Combinatorial Structures](http://algo.inria.fr/flajolet/Publications/DuFlLoSc04.pdf),
+  P. Duchon, P. Flajolet, G. Louchard, G. Schaeffer.
+
+- The evaluation of generating functions defined by systems of equations is
+  taken from
+  [Boltzmann Oracle for Combinatorial Systems](http://www.dmtcs.org/pdfpapers/dmAI0132.pdf),
+  C. Pivoteau, B. Salvy, M. Soria.

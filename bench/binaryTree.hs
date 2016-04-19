@@ -1,37 +1,50 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 module Main where
 
+import Control.DeepSeq
 import Criterion.Main
 import Data.Data
+import GHC.Generics
 import Data.Random.Generics
 import Data.Random.Generics.Internal
 import Test.QuickCheck
 
 data T = N T T | L
-  deriving (Eq, Ord, Show, Data)
+  deriving (Eq, Ord, Show, Data, Generic)
+
+instance NFData T
 
 -- size
 s :: T -> Integer
 s (N l r) = 1 + s l + s r
 s L = 1
 
--- Rejection is more elementary and works fine too.
 rejectT :: Int -> Gen T
-rejectT n = arbitraryGenerator n
+rejectT = generator asGen
+
+rejectSimpleT :: Int -> Gen T
+rejectSimpleT = simpleGenerator' asGen
 
 -- Pointing makes the generator more precise.
 pointT :: Int -> Gen T
-pointT n = arbitraryApproxGenerator [] 1 (Just n) (Just (tolerance epsilon n))
+pointT = pointedGenerator asGen
 
-benchPoint, benchReject :: Int -> Benchmark
-benchPoint n = bench ("point " ++ show n) $ whnfGen (pointT n)
-benchReject n = bench ("reject " ++ show n) $ whnfGen (rejectT n)
+pointRejectT :: Int -> Gen T
+pointRejectT size =
+  generator_ asGen 1 (Just size) (tolerance epsilon size)
 
 main = defaultMain $
   [5 .. 10] >>= \e ->
-    [ benchReject (2 ^ e)
-    , benchPoint (2 ^ e)
+    let n = 2 ^ e in
+    [ bench ("reject " ++ show n) $
+        nfGen (rejectT n)
+    , bench ("reject-simple " ++ show n) $
+        nfGen (rejectSimpleT n)
+    , bench ("point " ++ show n) $
+        nfGen (pointT n)
+    , bench ("point-reject " ++ show n) $
+        nfGen (pointRejectT n)
     ]
 
-whnfGen :: Gen a -> Benchmarkable
-whnfGen = whnfIO . generate
+nfGen :: NFData a => Gen a -> Benchmarkable
+nfGen = nfIO . generate

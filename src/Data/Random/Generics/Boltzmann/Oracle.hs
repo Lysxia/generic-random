@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
 module Data.Random.Generics.Boltzmann.Oracle where
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
@@ -65,6 +66,9 @@ data DataDef = DataDef
   -- objects of a given type.
   , lCoef :: HashMap C Integer
   -- ^ Leading coefficients: number of objects of smallest size.
+  , degree :: HashMap Int Int
+  -- ^ Degrees of the generating functions, when applicable: greatest size of
+  -- objects of a given type.
   } deriving Show
 
 -- | A pair @C i k@ represents the @k@-th "pointing" of the type at index @i@,
@@ -83,6 +87,7 @@ emptyDataDef = DataDef
   , types = HashMap.empty
   , order = HashMap.empty
   , lCoef = HashMap.empty
+  , degree = HashMap.empty
   }
 
 -- | Find all types that may be types of subterms of a value of type @a@.
@@ -105,7 +110,7 @@ primExp = fromInteger primlCoef * X 0 ^ primOrder
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
-collectTypesM :: Data a => a -> State DataDef (Int, Int, Integer)
+collectTypesM :: Data a => a -> State DataDef (Int, Int, Integer, Maybe Int)
 collectTypesM a = do
   let t = typeRep [a]
   DataDef{..} <- get
@@ -117,48 +122,52 @@ collectTypesM a = do
         , index = HashMap.insert t i index
         , xedni = HashMap.insert i (SomeData a) xedni
         , order = HashMap.insert i (error "Unknown order") order
-        , lCoef = HashMap.insert (C i 0) 0 lCoef }
+        , lCoef = HashMap.insert (C i 0) 0 lCoef
+        }
       collectTypesM' a i -- Updates order and lCoef
     Just i ->
       let
         order_i = order #! i
         lCoef_i = lCoef #! C i 0
-      in return (i, order_i, lCoef_i)
+        degree_i = HashMap.lookup i degree
+      in return (i, order_i, lCoef_i, degree_i)
 
 -- | Traversal of the definition of a datatype.
 collectTypesM'
-  :: Data a => a -> Int -> State DataDef (Int, Int, Integer)
+  :: Data a => a -> Int -> State DataDef (Int, Int, Integer, Maybe Int)
 collectTypesM' a i = do
   let d = dataTypeOf a
-  (types_i, order_i, lCoef_i) <-
+  (types_i, order_i, lCoef_i, degree_i) <-
     if isAlgType d then do
       let
         constrs = dataTypeConstrs d
-        collect :: GUnfold (StateT ([Int], Int, Integer) (State DataDef))
+        collect :: GUnfold (StateT ([Int], Int, Integer, Maybe Int) (State DataDef))
         collect mkCon = do
           f <- mkCon
           let b = ofType f
-          (j, order_, lead_) <- lift (collectTypesM b)
-          modify $ \(js, order', lead') ->
-            (j : js, order_ + order', lead_ * lead')
+          (j, order_, lead_, degree_) <- lift (collectTypesM b)
+          modify $ \(js, order', lead', degree') ->
+            (j : js, order_ + order', lead_ * lead', liftA2 (+) degree_ degree')
           return (f b)
-      cjols <- forM constrs $ \constr -> do
-        (js, order', lead') <-
+      cjolds <- forM constrs $ \constr -> do
+        (js, order', lead', degree') <-
           gunfold collect return constr `asTypeOf` return a
-            `execStateT` ([], 1, 1)
-        return ((1, constr, [ C j 0 | j <- js]), (order', lead'))
+            `execStateT` ([], 1, 1, Just 1)
+        return ((1, constr, [ C j 0 | j <- js]), (order', lead'), degree')
       let
-        (types_i, ols) = unzip cjols
+        (types_i, ols, ds) = unzip3 cjolds
         (order_i, lCoef_i) = minSum ols
-      return (types_i, order_i, lCoef_i)
+        degree_i = maxDegree ds
+      return (types_i, order_i, lCoef_i, degree_i)
     else
-      return ([], primOrder, primlCoef)
+      return ([], primOrder, primlCoef, Just primOrder)
   modify $ \dd@DataDef{..} -> dd
     { types = HashMap.insert (C i 0) types_i types
     , order = HashMap.insert i order_i order
     , lCoef = HashMap.insert (C i 0) lCoef_i lCoef
+    , degree = maybe id (HashMap.insert i) degree_i degree
     }
-  return (i, order_i, lCoef_i)
+  return (i, order_i, lCoef_i, degree_i)
 
 -- | If @(o, l)@ represents a power series of order @o@ and leading coefficient
 -- @l@, and similarly for @(o', l')@, this finds the order and leading
@@ -174,6 +183,9 @@ minPlus ol@(order, lCoef) ol'@(order', lCoef')
 minSum :: (Ord int, Bounded int, Eq integer, Num integer)
   => [(int, integer)] -> (int, integer)
 minSum = foldl minPlus (maxBound, 0)
+
+maxDegree :: (Ord int, Bounded int) => [Maybe int] -> Maybe int
+maxDegree = foldl (liftA2 max) (Just minBound)
 
 -- | Pointing operator.
 --
@@ -238,9 +250,9 @@ point dd@DataDef{..} = dd
 -- | An oracle gives the values of the generating functions at some @x@.
 type Oracle = HashMap C Double
 
--- | Find the value of @x@ such that the average size of the generator is
--- equal to @size@, and produce the associated oracle. If the size is
--- @Nothing@, find the radius of convergence.
+-- | Find the value of @x@ such that the average size of the generator
+-- for the @k-1@-th pointing is equal to @size@, and produce the associated
+-- oracle. If the size is @Nothing@, find the radius of convergence.
 --
 -- The search evaluates the generating functions for some values of @x@ in
 -- order to run a binary search. The evaluator is implemented using Newton's
