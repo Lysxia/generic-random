@@ -12,7 +12,7 @@ import Data.Data
 import Data.Hashable ( Hashable )
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Maybe ( fromJust )
+import Data.Maybe ( fromJust, isJust )
 import qualified Data.Vector.Storable as V
 import GHC.Generics ( Generic )
 import GHC.Prim ( Any )
@@ -25,6 +25,12 @@ data SomeData where
 
 -- | Dummy instance for debugging.
 instance Show SomeData where
+  show _ = "_"
+
+data Alias m where
+  Alias :: (Data a, Typeable b) => (m a -> m b) -> Alias m
+
+instance Show (Alias m) where
   show _ = "_"
 
 -- | We build a dictionary which reifies type information in order to
@@ -48,12 +54,13 @@ instance Show SomeData where
 -- The /order/ (or /valuation/) of a power series is the index of the first
 -- non-zero coefficient, called the /leading coefficient/.
 
-data DataDef = DataDef
+data DataDef m = DataDef
   { count :: Int -- ^ Number of registered types
   , points :: Int -- ^ Number of iterations of the pointing operator
-  , index :: HashMap TypeRep Int -- ^ Map from types to indices
-  , xedni :: HashMap Int SomeData -- ^ Inverse map from indices to types
-  , types :: HashMap C [(Integer, Constr, [C])]
+  , index :: HashMap TypeRep (Either Aliased Ix) -- ^ Map from types to indices
+  , xedni :: HashMap Ix SomeData -- ^ Inverse map from indices to types
+  , xedni' :: HashMap Aliased (Ix, Alias m) -- ^ Inverse map to aliases
+  , types :: HashMap C [(Integer, Constr, [C'])]
   -- ^ Structure of types and their pointings (up to 'points', initially 0)
   --
   -- Primitive types and empty types are mapped to an empty constructor list, and
@@ -61,40 +68,59 @@ data DataDef = DataDef
   -- associated to it by 'xedni'.
   --
   -- The integer is a multiplicity which can be > 1 for pointings.
-  , order :: HashMap Int Int
+  , order :: HashMap Ix Int
   -- ^ Orders of the generating functions @C_i[k](x)@: smallest size of
   -- objects of a given type.
   , lCoef :: HashMap C Integer
   -- ^ Leading coefficients: number of objects of smallest size.
-  , degree :: HashMap Int Int
+  , degree :: HashMap Ix Int
   -- ^ Degrees of the generating functions, when applicable: greatest size of
   -- objects of a given type.
   } deriving Show
 
 -- | A pair @C i k@ represents the @k@-th "pointing" of the type at index @i@,
 -- with generating function @C_i[k](x)@.
-data C = C Int Int
+data C = C Ix Int
   deriving (Eq, Ord, Show, Generic)
 
 instance Hashable C
 
-emptyDataDef :: DataDef
-emptyDataDef = DataDef
+data AC = AC Aliased Int
+  deriving (Eq, Ord, Show, Generic)
+
+instance Hashable AC
+
+type C' = (Maybe Aliased, C)
+
+newtype Aliased = Aliased Int
+  deriving (Eq, Ord, Show, Generic)
+
+instance Hashable Aliased
+
+type Ix = Int
+
+dataDef :: [Alias m] -> DataDef m
+dataDef as = DataDef
   { count = 0
   , points = 0
-  , index = HashMap.empty
+  , index = index
   , xedni = HashMap.empty
+  , xedni' = xedni'
   , types = HashMap.empty
   , order = HashMap.empty
   , lCoef = HashMap.empty
   , degree = HashMap.empty
-  }
+  } where
+    xedni' = HashMap.fromList (fmap (\(i, a) -> (i, (-1, a))) as')
+    index = HashMap.fromList (fmap (\(i, a) -> (ofType a, Left i)) as')
+    as' = zip (fmap Aliased [0 ..]) as
+    ofType (Alias f) = typeRep (f undefined)
 
 -- | Find all types that may be types of subterms of a value of type @a@.
 --
 -- This will loop if there are infinitely many such types.
-collectTypes :: Data a => a -> DataDef
-collectTypes a = collectTypesM a `execState` emptyDataDef
+collectTypes :: Data a => [Alias m] -> a -> DataDef m
+collectTypes as a = collectTypesM a `execState` dataDef as
 
 -- | Primitive datatypes have @C(x) = x@: they are considered as
 -- having a single object ('lCoef') of size 1 ('order')).
@@ -110,42 +136,71 @@ primExp = fromInteger primlCoef * X 0 ^ primOrder
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
-collectTypesM :: Data a => a -> State DataDef (Int, Int, Integer, Maybe Int)
-collectTypesM a = do
+collectTypesM :: Data a => a
+  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
+collectTypesM a = chaseType a (const id)
+
+chaseType :: Data a => a
+  -> ((Maybe (Alias m), Ix) -> DataDef m -> DataDef m)
+  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
+chaseType a k = do
   let t = typeRep [a]
   DataDef{..} <- get
+  let
+    lookup i r =
+      let
+        order_i = order #! i
+        lCoef_i = lCoef #! C i 0
+        degree_i = HashMap.lookup i degree
+      in return (r, (order_i, lCoef_i, degree_i))
   case HashMap.lookup t index of
     Nothing -> do
       let i = count
       modify $ \dd -> dd
         { count = i + 1
-        , index = HashMap.insert t i index
+        , index = HashMap.insert t (Right i) index
         , xedni = HashMap.insert i (SomeData a) xedni
         , order = HashMap.insert i (error "Unknown order") order
         , lCoef = HashMap.insert (C i 0) 0 lCoef
         }
+      modify (k (Nothing, i))
       collectTypesM' a i -- Updates order and lCoef
-    Just i ->
-      let
-        order_i = order #! i
-        lCoef_i = lCoef #! C i 0
-        degree_i = HashMap.lookup i degree
-      in return (i, order_i, lCoef_i, degree_i)
+    Just (Right i) -> lookup i (Right i)
+    Just (Left j) ->
+      case xedni' #! j of
+        (-1, Alias f) -> do
+          (_, old) <- chaseType (ofType f) $ \(alias, i) ->
+            let
+              alias' = case alias of
+                Nothing -> Alias f
+                Just (Alias g) -> Alias (f . unsafeCoerce . g)
+            in
+            k (Just alias', i) . \dd -> dd
+              { xedni' = HashMap.insert j (i, alias') xedni' }
+          return (Left j, old)
+        (i, _) -> lookup i (Left j)
+  where
+    ofType :: (m a -> m b) -> a
+    ofType _ = undefined
 
 -- | Traversal of the definition of a datatype.
 collectTypesM'
-  :: Data a => a -> Int -> State DataDef (Int, Int, Integer, Maybe Int)
+  :: Data a => a -> Ix
+  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
 collectTypesM' a i = do
   let d = dataTypeOf a
-  (types_i, order_i, lCoef_i, degree_i) <-
+  (types_i, old@(order_i, lCoef_i, degree_i)) <-
     if isAlgType d then do
       let
         constrs = dataTypeConstrs d
-        collect :: GUnfold (StateT ([Int], Int, Integer, Maybe Int) (State DataDef))
+        collect
+          :: GUnfold (StateT
+            ([Either Aliased Ix], Int, Integer, Maybe Int)
+            (State (DataDef m)))
         collect mkCon = do
           f <- mkCon
           let b = ofType f
-          (j, order_, lead_, degree_) <- lift (collectTypesM b)
+          (j, (order_, lead_, degree_)) <- lift (collectTypesM b)
           modify $ \(js, order', lead', degree') ->
             (j : js, order_ + order', lead_ * lead', liftA2 (+) degree_ degree')
           return (f b)
@@ -153,21 +208,25 @@ collectTypesM' a i = do
         (js, order', lead', degree') <-
           gunfold collect return constr `asTypeOf` return a
             `execStateT` ([], 1, 1, Just 1)
-        return ((1, constr, [ C j 0 | j <- js]), (order', lead'), degree')
+        dd <- get
+        let
+          c (Left j) = (Just j, C (fst (xedni' dd #! j)) 0)
+          c (Right i) = (Nothing, C i 0)
+        return ((1, constr, [ c j | j <- js]), (order', lead'), degree')
       let
         (types_i, ols, ds) = unzip3 cjolds
         (order_i, lCoef_i) = minSum ols
         degree_i = maxDegree ds
-      return (types_i, order_i, lCoef_i, degree_i)
+      return (types_i, (order_i, lCoef_i, degree_i))
     else
-      return ([], primOrder, primlCoef, Just primOrder)
+      return ([], (primOrder, primlCoef, Just primOrder))
   modify $ \dd@DataDef{..} -> dd
     { types = HashMap.insert (C i 0) types_i types
     , order = HashMap.insert i order_i order
     , lCoef = HashMap.insert (C i 0) lCoef_i lCoef
     , degree = maybe id (HashMap.insert i) degree_i degree
     }
-  return (i, order_i, lCoef_i, degree_i)
+  return (Right i, old)
 
 -- | If @(o, l)@ represents a power series of order @o@ and leading coefficient
 -- @l@, and similarly for @(o', l')@, this finds the order and leading
@@ -229,7 +288,7 @@ maxDegree = foldl (liftA2 max) (Just minBound)
 -- constructor paired with that distribution is the multinomial coefficient
 -- @multinomial k [p_1, ..., p_c]@.
 
-point :: DataDef -> DataDef
+point :: DataDef m -> DataDef m
 point dd@DataDef{..} = dd
   { points = points'
   , types = foldl g types [0 .. count-1]
@@ -244,7 +303,7 @@ point dd@DataDef{..} = dd
       ps <- partitions points' (length js)
       let
         mult = multinomial points' ps
-        js' = zipWith (\(C j _) p -> C j p) js ps
+        js' = zipWith (\(j', C i _) p -> (j', C i p)) js ps
       return (mult, constr, js')
 
 -- | An oracle gives the values of the generating functions at some @x@.
@@ -259,15 +318,18 @@ type Oracle = HashMap C Double
 -- method, the convergence of which has been shown for relevant systems in
 -- /Boltzmann Oracle for Combinatorial Systems/,
 -- C. Pivoteau, B. Salvy, M. Soria.
-makeOracle :: DataDef -> TypeRep -> Maybe Int -> Oracle
-makeOracle dd@DataDef{..} t size' =
+makeOracle :: DataDef m -> TypeRep -> Maybe Int -> Oracle
+makeOracle dd t size' =
   seq v
   HashMap.fromList (zip cs (V.toList v))
   where
+    DataDef{..} = if isJust size' then point dd else dd
     cs = flip C <$> [0 .. points] <*> [0 .. count - 1]
     m = count * (points + 1)
     k = points - 1
-    i = index #! t
+    i = case index #! t of
+      Left j -> fst (xedni' #! j)
+      Right i -> i
     checkSize (Just size) (Just ys) = fromIntegral size >= size_
       where
         size_ = ys ! j' / ys ! j
@@ -284,7 +346,7 @@ makeOracle dd@DataDef{..} t size' =
 
 -- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
 toEquation
-  :: (Eq a, Num a) => DataDef -> (C, [(Integer, constr, [C])]) -> Equation a
+  :: (Eq a, Num a) => DataDef m -> (C, [(Integer, constr, [C'])]) -> Equation a
 toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
   X (dd ? c) := rhs tyInfo
   where
@@ -294,7 +356,7 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
           AlgRep _ -> Zero
           _ -> primExp
     rhs tyInfo = X (-1) * (sum . fmap toProd) tyInfo
-    toProd (w, _, js) = fromInteger w * product [ X (dd ? j) | j <- js ]
+    toProd (w, _, js) = fromInteger w * product [ X (dd ? j) | (_, j) <- js ]
 
 -- | Assuming @p . f@ is satisfied only for positive values in some interval
 -- @(0, r]@, find @f r@.
@@ -317,7 +379,7 @@ search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
 
 -- | Maps a key representing a type @a@ (or one of its pointings) to a
 -- generator @m a@.
-type Generators m = HashMap C (m Any)
+type Generators m = (HashMap AC (m Any), HashMap C (m Any))
 
 -- | Generators of random primitive values and other useful actions to
 -- inject in our generator.
@@ -335,10 +397,10 @@ data PrimRandom m = PrimRandom
 -- | Build all involved generators at once.
 makeGenerators
   :: forall m. Monad m
-  => DataDef -> Oracle -> PrimRandom m -> Generators m
+  => DataDef m -> Oracle -> PrimRandom m -> Generators m
 makeGenerators DataDef{..} oracle PrimRandom{..} =
   seq oracle
-  generators
+  (generatorsL, generatorsR)
   where
     f (C i _) tyInfo = incr >> case xedni #! i of
       SomeData a -> fmap unsafeCoerce $
@@ -355,36 +417,43 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
               AlgRep _ -> error "Cannot generate for empty type."
               NoRep -> error "No representation."
           _ -> frequencyWith getRandomR_ (fmap g tyInfo) `fTypeOf` a
-    g :: Data a => (Integer, Constr, [C]) -> (Double, m a)
+    g :: Data a => (Integer, Constr, [C']) -> (Double, m a)
     g (v, constr, js) =
       ( fromInteger v * w
       , gunfold generate return constr `runReaderT` gs)
       where
-        gs = fmap (generators #!) js
-        w = product $ fmap (oracle #!) js
+        gs = fmap (\(j', i) -> m j' i) js
+        m = maybe (generatorsR #!) m'
+        m' j (C _ k) = (generatorsL #! AC j k)
+        w = product $ fmap ((oracle #!) . snd) js
+    h (j, (i, Alias f)) k =
+      (AC j k, (unsafeCoerce . f . unsafeCoerce) (generatorsR #! C i k))
     generate :: GUnfold (ReaderT [m Any] m)
     generate rest = ReaderT $ \(g : gs) -> do
       x <- g
       f <- rest `runReaderT` gs
       (return . f . unsafeCoerce) x
-    generators = HashMap.mapWithKey f types
+    generatorsL = HashMap.fromList (liftA2 h (HashMap.toList xedni') [0 .. points])
+    generatorsR = HashMap.mapWithKey f types
 
 -- * Short operators
 
-(?) :: DataDef -> C -> Int
+(?) :: DataDef m -> C -> Int
 dd ? C i k = i + k * count dd
 
 ix :: C -> Int
 ix (C i _) = i
 
-(?!) :: DataDef -> Int -> C
+(?!) :: DataDef m -> Int -> C
 dd ?! j = C i k
   where (k, i) = j `divMod` count dd
 
 getGenerator :: (Functor m, Data a)
-  => DataDef -> Generators m -> proxy a -> Int -> m a
-getGenerator dd generators a k =
-  fmap unsafeCoerce (generators #! C (index dd #! typeRep a) k)
+  => DataDef m -> Generators m -> proxy a -> Int -> m a
+getGenerator dd (l, r) a k = fmap unsafeCoerce $
+  case index dd #! typeRep a of
+    Right i -> (r #! C i k)
+    Left j -> (l #! AC j k)
 
 -- * General helper functions
 

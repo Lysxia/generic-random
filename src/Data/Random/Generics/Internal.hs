@@ -6,7 +6,6 @@ import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Data.Data
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Maybe
 import Data.Random.Generics.Boltzmann.Oracle
 
 -- * Helper functions
@@ -17,10 +16,12 @@ makeGenerator :: (Data a, Monad m)
   => PrimRandom m -> proxy a -> ((Size, Maybe Size), Int -> Maybe Size -> m a)
 makeGenerator primRandom a = ((minSize, maxSize'), makeGenerator')
   where
-    dd = collectTypes (undefined `asProxyTypeOf` a)
+    dd = collectTypes [] (undefined `asProxyTypeOf` a)
     -- We need the next pointing to capture the average size in an equation.
     t = typeRep a
-    i = index dd #! t
+    i = case index dd #! t of
+      Left j -> fst (xedni' dd #! j)
+      Right i -> i
     minSize = order dd #! i
     maxSize' = HashMap.lookup i (degree dd)
     makeGenerator' _ (Just size)
@@ -31,8 +32,7 @@ makeGenerator primRandom a = ((minSize, maxSize'), makeGenerator')
       error "Cannot make singular sampler: this type is finite."
     makeGenerator' k size' = getGenerator dd' generators a k
       where
-        dd' = iterate point dd !! k'
-        k' = if isJust size' then k + 1 else k
+        dd' = iterate point dd !! k
         oracle = makeOracle dd' t size'
         generators = makeGenerators dd' oracle primRandom
 
