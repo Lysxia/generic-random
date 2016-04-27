@@ -7,16 +7,18 @@ import Control.Monad.Trans.Maybe
 import Data.Data
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Random.Generics.Boltzmann.Oracle
+import Data.Random.Generics.Boltzmann.Types
 
 -- * Helper functions
 
 type Size = Int
 
 makeGenerator :: (Data a, Monad m)
-  => PrimRandom m -> proxy a -> ((Size, Maybe Size), Int -> Maybe Size -> m a)
-makeGenerator primRandom a = ((minSize, maxSize'), makeGenerator')
+  => PrimRandom m -> [Alias m] -> proxy a
+  -> ((Size, Maybe Size), Int -> Maybe Size -> m a)
+makeGenerator primRandom aliases a = ((minSize, maxSize'), makeGenerator')
   where
-    dd = collectTypes [] a
+    dd = collectTypes aliases a
     -- We need the next pointing to capture the average size in an equation.
     t = typeRep a
     i = case index dd #! t of
@@ -36,13 +38,16 @@ makeGenerator primRandom a = ((minSize, maxSize'), makeGenerator')
         oracle = makeOracle dd' t size'
         generators = makeGenerators dd' oracle primRandom
 
+type AliasR m = Alias (RejectT m)
+
 ceiledRejectionSampler
-  :: (Data a, Monad m) => PrimRandom m
-  -> proxy a -> ((Size, Maybe Size), Int -> Maybe Size -> (Size, Size) -> m a)
-ceiledRejectionSampler primRandom a =
+  :: (Data a, Monad m)
+  => PrimRandom m -> [AliasR m] -> proxy a
+  -> ((Size, Maybe Size), Int -> Maybe Size -> (Size, Size) -> m a)
+ceiledRejectionSampler primRandom aliases a =
   (range, (fmap . fmap) (flip runRejectT) makeGenerator')
   where
-    (range, makeGenerator') = makeGenerator primRandom' a
+    (range, makeGenerator') = makeGenerator primRandom' aliases a
     primRandom' = ceilPrimRandom primRandom
 
 epsilon :: Double
