@@ -19,9 +19,9 @@ library
     Data.Random.Generics.Internal
     Data.Random.Generics.Boltzmann.Oracle
     Data.Random.Generics.Boltzmann.Solver
+    Data.Random.Generics.Boltzmann.Types
   build-depends:
     base >= 4.7 && < 5,
-    ghc-prim,
     containers,
     hashable,
     unordered-containers,

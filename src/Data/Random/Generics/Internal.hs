@@ -16,7 +16,7 @@ makeGenerator :: (Data a, Monad m)
   => PrimRandom m -> proxy a -> ((Size, Maybe Size), Int -> Maybe Size -> m a)
 makeGenerator primRandom a = ((minSize, maxSize'), makeGenerator')
   where
-    dd = collectTypes [] (undefined `asProxyTypeOf` a)
+    dd = collectTypes [] a
     -- We need the next pointing to capture the average size in an equation.
     t = typeRep a
     i = case index dd #! t of

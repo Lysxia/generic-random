@@ -15,23 +15,9 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe ( fromJust, isJust )
 import qualified Data.Vector.Storable as V
 import GHC.Generics ( Generic )
-import GHC.Prim ( Any )
 import GHC.Stack ( CallStack, showCallStack )
-import Unsafe.Coerce
+import Data.Random.Generics.Boltzmann.Types
 import Data.Random.Generics.Boltzmann.Solver
-
-data SomeData where
-  SomeData :: Data a => a -> SomeData
-
--- | Dummy instance for debugging.
-instance Show SomeData where
-  show _ = "_"
-
-data Alias m where
-  Alias :: (Data a, Typeable b) => (m a -> m b) -> Alias m
-
-instance Show (Alias m) where
-  show _ = "_"
 
 -- | We build a dictionary which reifies type information in order to
 -- create a Boltzmann generator.
@@ -58,7 +44,7 @@ data DataDef m = DataDef
   { count :: Int -- ^ Number of registered types
   , points :: Int -- ^ Number of iterations of the pointing operator
   , index :: HashMap TypeRep (Either Aliased Ix) -- ^ Map from types to indices
-  , xedni :: HashMap Ix SomeData -- ^ Inverse map from indices to types
+  , xedni :: HashMap Ix SomeData' -- ^ Inverse map from indices to types
   , xedni' :: HashMap Aliased (Ix, Alias m) -- ^ Inverse map to aliases
   , types :: HashMap C [(Integer, Constr, [C'])]
   -- ^ Structure of types and their pointings (up to 'points', initially 0)
@@ -119,7 +105,7 @@ dataDef as = DataDef
 -- | Find all types that may be types of subterms of a value of type @a@.
 --
 -- This will loop if there are infinitely many such types.
-collectTypes :: Data a => [Alias m] -> a -> DataDef m
+collectTypes :: Data a => [Alias m] -> proxy a -> DataDef m
 collectTypes as a = collectTypesM a `execState` dataDef as
 
 -- | Primitive datatypes have @C(x) = x@: they are considered as
@@ -136,15 +122,15 @@ primExp = fromInteger primlCoef * X 0 ^ primOrder
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
-collectTypesM :: Data a => a
+collectTypesM :: Data a => proxy a
   -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
 collectTypesM a = chaseType a (const id)
 
-chaseType :: Data a => a
+chaseType :: Data a => proxy a
   -> ((Maybe (Alias m), Ix) -> DataDef m -> DataDef m)
   -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
 chaseType a k = do
-  let t = typeRep [a]
+  let t = typeRep a
   DataDef{..} <- get
   let
     lookup i r =
@@ -159,7 +145,7 @@ chaseType a k = do
       modify $ \dd -> dd
         { count = i + 1
         , index = HashMap.insert t (Right i) index
-        , xedni = HashMap.insert i (SomeData a) xedni
+        , xedni = HashMap.insert i (someData' a) xedni
         , order = HashMap.insert i (error "Unknown order") order
         , lCoef = HashMap.insert (C i 0) 0 lCoef
         }
@@ -173,22 +159,22 @@ chaseType a k = do
             let
               alias' = case alias of
                 Nothing -> Alias f
-                Just (Alias g) -> Alias (f . unsafeCoerce . g)
+                Just (Alias g) -> Alias (composeCastM f g)
             in
             k (Just alias', i) . \dd -> dd
               { xedni' = HashMap.insert j (i, alias') xedni' }
           return (Left j, old)
         (i, _) -> lookup i (Left j)
   where
-    ofType :: (m a -> m b) -> a
+    ofType :: (m a -> m b) -> m a
     ofType _ = undefined
 
 -- | Traversal of the definition of a datatype.
 collectTypesM'
-  :: Data a => a -> Ix
+  :: Data a => proxy a -> Ix
   -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
 collectTypesM' a i = do
-  let d = dataTypeOf a
+  let d = withProxy dataTypeOf a
   (types_i, old@(order_i, lCoef_i, degree_i)) <-
     if isAlgType d then do
       let
@@ -199,14 +185,16 @@ collectTypesM' a i = do
             (State (DataDef m)))
         collect mkCon = do
           f <- mkCon
-          let b = ofType f
+          let ofType :: (b -> a) -> Proxy b
+              ofType _ = Proxy
+              b = ofType f
           (j, (order_, lead_, degree_)) <- lift (collectTypesM b)
           modify $ \(js, order', lead', degree') ->
             (j : js, order_ + order', lead_ * lead', liftA2 (+) degree_ degree')
-          return (f b)
+          return (withProxy f b)
       cjolds <- forM constrs $ \constr -> do
         (js, order', lead', degree') <-
-          gunfold collect return constr `asTypeOf` return a
+          gunfold collect return constr `proxyType` a
             `execStateT` ([], 1, 1, Just 1)
         dd <- get
         let
@@ -352,7 +340,7 @@ toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
   where
     rhs [] = case xedni #! i of
       SomeData a ->
-        case (dataTypeRep . dataTypeOf) a of
+        case (dataTypeRep . withProxy dataTypeOf) a of
           AlgRep _ -> Zero
           _ -> primExp
     rhs tyInfo = X (-1) * (sum . fmap toProd) tyInfo
@@ -379,7 +367,7 @@ search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
 
 -- | Maps a key representing a type @a@ (or one of its pointings) to a
 -- generator @m a@.
-type Generators m = (HashMap AC (m Any), HashMap C (m Any))
+type Generators m = (HashMap AC (SomeData m), HashMap C (SomeData m))
 
 -- | Generators of random primitive values and other useful actions to
 -- inject in our generator.
@@ -402,11 +390,11 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
   seq oracle
   (generatorsL, generatorsR)
   where
-    f (C i _) tyInfo = incr >> case xedni #! i of
-      SomeData a -> fmap unsafeCoerce $
+    f (C i _) tyInfo = case xedni #! i of
+      SomeData (a :: Proxy a) -> SomeData $ incr >>
         case tyInfo of
           [] ->
-            let dt = dataTypeOf a in
+            let dt = withProxy dataTypeOf a in
             case dataTypeRep dt of
               IntRep ->
                 fromConstr . mkIntegralConstr dt <$> int
@@ -416,7 +404,7 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
                 fromConstr . mkCharConstr dt <$> char
               AlgRep _ -> error "Cannot generate for empty type."
               NoRep -> error "No representation."
-          _ -> frequencyWith getRandomR_ (fmap g tyInfo) `fTypeOf` a
+          _ -> frequencyWith getRandomR_ (fmap g tyInfo) `proxyType` a
     g :: Data a => (Integer, Constr, [C']) -> (Double, m a)
     g (v, constr, js) =
       ( fromInteger v * w
@@ -427,12 +415,10 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
         m' j (C _ k) = (generatorsL #! AC j k)
         w = product $ fmap ((oracle #!) . snd) js
     h (j, (i, Alias f)) k =
-      (AC j k, (unsafeCoerce . f . unsafeCoerce) (generatorsR #! C i k))
-    generate :: GUnfold (ReaderT [m Any] m)
-    generate rest = ReaderT $ \(g : gs) -> do
-      x <- g
-      f <- rest `runReaderT` gs
-      (return . f . unsafeCoerce) x
+      (AC j k, applyCast f (generatorsR #! C i k))
+    generate :: GUnfold (ReaderT [SomeData m] m)
+    generate rest = ReaderT $ \(g : gs) ->
+      rest `runReaderT` gs <*> unSomeData g
     generatorsL = HashMap.fromList (liftA2 h (HashMap.toList xedni') [0 .. points])
     generatorsR = HashMap.mapWithKey f types
 
@@ -450,20 +436,12 @@ dd ?! j = C i k
 
 getGenerator :: (Functor m, Data a)
   => DataDef m -> Generators m -> proxy a -> Int -> m a
-getGenerator dd (l, r) a k = fmap unsafeCoerce $
+getGenerator dd (l, r) a k = unSomeData $
   case index dd #! typeRep a of
     Right i -> (r #! C i k)
     Left j -> (l #! AC j k)
 
 -- * General helper functions
-
--- | Type annotation. The produced value should not be evaluated.
-ofType :: (?loc :: CallStack) => (b -> a) -> b
-ofType _ = error
-  ("ofType: this should not be evaluated.\n" ++ showCallStack ?loc)
-
-fTypeOf :: f a -> a -> f a
-fTypeOf = const
 
 frequencyWith :: Monad m
   => ((Double, Double) -> m Double) -> [(Double, m a)] -> m a
