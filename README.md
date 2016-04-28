@@ -1,34 +1,26 @@
 Generic random generators
 =========================
 
-Create a sized random generator for almost any type.
+Define sized random generators for almost any type.
 
-This will only work on types `a` such that:
+    {-# LANGUAGE DeriveDataTypeable #-}
+    import Data.Data
+    import Test.QuickCheck
+    import Data.Random.Generics
 
-- they are instances of `Data`;
-- the set of types of subterms of values of type `a` is finite;
-- and all of these types have at least one finite value (i.e., values with
-  finitely many constructors) (otherwise our concept of "size" would not be
-  meaningful).
+    data Term = Lambda Int Term | App Term Term | Var Int
+      deriving (Show, Data)
 
-The size of a value is its number of constructors.
+    instance Arbitrary Term where
+      arbitrary = sized (generator asGen)
 
-The desired average `size` must be reachable, i.e., be larger than the smallest
-value of type `a`, and smaller than the largest value of type `a` (when there
-is one).
+    main = sample (arbitrary :: Gen Term)
 
-Examples of problematic types
------------------------------
-
-    data E a = L a | R (E [a])
-
-Indeed, in `E`, every type of the form `[[...[[a]]...]]` occurs after
-sufficiently many unwrappings of `R`'s.
-
-    data I = C I
-
-If we ignore bottoms, the only value of type `I` is an infinite stack of `C`
-constructors.
+- Objects of the same size (number of constructors) occur with the same
+  probability (see Duchon et al., references below).
+- Implements rejection sampling and pointing.
+- Works with QuickCheck and MonadRandom.
+- Can be extended or modified with user defined generators.
 
 References
 ----------
@@ -37,7 +29,7 @@ References
   [Boltzmann Samplers for the Random Generation of Combinatorial Structures](http://algo.inria.fr/flajolet/Publications/DuFlLoSc04.pdf),
   P. Duchon, P. Flajolet, G. Louchard, G. Schaeffer.
 
-- The evaluation of generating functions defined by systems of equations is
-  taken from
+- The numerical evaluation of recursively defined generating functions
+  is taken from
   [Boltzmann Oracle for Combinatorial Systems](http://www.dmtcs.org/pdfpapers/dmAI0132.pdf),
   C. Pivoteau, B. Salvy, M. Soria.

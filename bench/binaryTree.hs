@@ -20,21 +20,21 @@ s (N l r) = 1 + s l + s r
 s L = 1
 
 rejectT :: Int -> Gen T
-rejectT = generator asGen []
+rejectT = generator asGen
 
 rejectSimpleT :: Int -> Gen T
-rejectSimpleT = simpleGenerator' asGen []
+rejectSimpleT = simpleGenerator' asGen
 
 -- Pointing makes the generator more precise.
 pointT :: Int -> Gen T
-pointT = pointedGenerator asGen []
+pointT = pointedGenerator asGen
 
 pointRejectT :: Int -> Gen T
 pointRejectT size =
   generator_ asGen [] 1 (Just size) (tolerance epsilon size)
 
 main = defaultMain $
-  0 : [2 ^ e | e <- [5 .. 10]] >>= \n ->
+  [2 ^ e | e <- [5 .. 10]] >>= \n ->
     [ bench ("reject " ++ show n) $
         nfGen (rejectT n)
     , bench ("reject-simple " ++ show n) $

@@ -22,7 +22,7 @@ instance Show F where
 gen :: Gen [F]
 gen = pointedGenerator asGen aliases 10
   where
-    aliases = [alias' $ \() -> fmap F arbitrary :: Gen F]
+    aliases = [alias $ \() -> fmap F arbitrary :: Gen F]
 
 main :: IO ()
 main = sample gen
