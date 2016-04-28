@@ -5,6 +5,7 @@ description:         Please see README.md
 homepage:            http://github.com/lysxia/generic-random
 license:             MIT
 license-file:        LICENSE
+stability:           Experimental
 author:              Li-yao Xia
 maintainer:          lysxia@gmail.com
 category:            Generics, Testing
@@ -21,7 +22,7 @@ library
     Data.Random.Generics.Boltzmann.Solver
     Data.Random.Generics.Boltzmann.Types
   build-depends:
-    base >= 4.7 && < 5,
+    base >= 4.8 && < 5,
     containers,
     hashable,
     unordered-containers,
