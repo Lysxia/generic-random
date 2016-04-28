@@ -366,7 +366,9 @@ type Generators m = (HashMap AC (SomeData m), HashMap C (SomeData m))
 -- 'Test.QuickCheck.Gen'.
 data PrimRandom m = PrimRandom
   { incr :: m () -- Called for every constructor
-  , getRandomR_ :: (Double, Double) -> m Double
+  -- Generators in @[0, upperBound)@
+  , doubleR :: Double -> m Double
+  , integerR :: Integer -> m Integer
   , int :: m Int
   , double :: m Double
   , char :: m Char
@@ -376,25 +378,15 @@ data PrimRandom m = PrimRandom
 makeGenerators
   :: forall m. Monad m
   => DataDef m -> Oracle -> PrimRandom m -> Generators m
-makeGenerators DataDef{..} oracle PrimRandom{..} =
+makeGenerators DataDef{..} oracle pr@PrimRandom{..} =
   seq oracle
   (generatorsL, generatorsR)
   where
     f (C i _) tyInfo = case xedni #! i of
-      SomeData (a :: Proxy a) -> SomeData $ incr >>
+      SomeData a -> SomeData $ incr >>
         case tyInfo of
-          [] ->
-            let dt = withProxy dataTypeOf a in
-            case dataTypeRep dt of
-              IntRep ->
-                fromConstr . mkIntegralConstr dt <$> int
-              FloatRep ->
-                fromConstr . mkRealConstr dt <$> double
-              CharRep ->
-                fromConstr . mkCharConstr dt <$> char
-              AlgRep _ -> error "Cannot generate for empty type."
-              NoRep -> error "No representation."
-          _ -> frequencyWith getRandomR_ (fmap g tyInfo) `proxyType` a
+          [] -> defGen pr
+          _ -> frequencyWith doubleR (fmap g tyInfo) `proxyType` a
     g :: Data a => (Integer, Constr, [C']) -> (Double, m a)
     g (v, constr, js) =
       ( fromInteger v * w
@@ -406,11 +398,49 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
         w = product $ fmap ((oracle #!) . snd) js
     h (j, (i, Alias f)) k =
       (AC j k, applyCast f (generatorsR #! C i k))
-    generate :: GUnfold (ReaderT [SomeData m] m)
-    generate rest = ReaderT $ \(g : gs) ->
-      rest `runReaderT` gs <*> unSomeData g
     generatorsL = HashMap.fromList (liftA2 h (HashMap.toList xedni') [0 .. points])
     generatorsR = HashMap.mapWithKey f types
+
+type SmallGenerators m =
+  (HashMap Aliased (SomeData m), HashMap Ix (SomeData m))
+
+-- | Generators of values of minimal sizes
+smallGenerators :: forall m. Monad m => DataDef m -> PrimRandom m -> SmallGenerators m
+smallGenerators DataDef{..} pr@PrimRandom{..} = (generatorsL, generatorsR)
+  where
+    f i (SomeData a) = SomeData $ incr >>
+      case types #! C i 0 of
+        [] -> defGen pr
+        tyInfo ->
+          let gs = (tyInfo >>= g (order #! i)) in
+          frequencyWith integerR gs `proxyType` a
+    g :: Data a => Int -> (Integer, Constr, [C']) -> [(Integer, m a)]
+    g minSize (_, constr, js) =
+      guard (minSize == 1 + sum [ order #! i | (_, C i _) <- js ]) *>
+      [(weight, gunfold generate return constr `runReaderT` gs)]
+      where
+        weight = product [ lCoef #! c | (_, c) <- js ]
+        gs = fmap lookup js
+        lookup (j', C i _) = maybe (generatorsR #! i) (generatorsL #!) j'
+    h (j, (i, Alias f)) = (j, applyCast f (generatorsR #! i))
+    generatorsL = (HashMap.fromList . fmap h . HashMap.toList) xedni'
+    generatorsR = HashMap.mapWithKey f xedni
+
+generate :: Applicative m => GUnfold (ReaderT [SomeData m] m)
+generate rest = ReaderT $ \(g : gs) ->
+  rest `runReaderT` gs <*> unSomeData g
+
+defGen :: (Data a, Monad m) => PrimRandom m -> m a
+defGen PrimRandom{..} = gen
+  where
+    gen =
+      let dt = withProxy dataTypeOf gen in
+      case dataTypeRep dt of
+        IntRep -> fromConstr . mkIntegralConstr dt <$> int
+        FloatRep -> fromConstr . mkRealConstr dt <$> double
+        CharRep -> fromConstr . mkCharConstr dt <$> char
+        AlgRep _ -> error "Cannot generate for empty type."
+        NoRep -> error "No representation."
 
 -- * Short operators
 
@@ -436,19 +466,26 @@ getGenerator dd (l, r) a k = unSomeData $
     Right i -> (r #! C i k)
     Left j -> (l #! AC j k)
 
+getSmallGenerator :: (Functor m, Data a)
+  => DataDef m -> SmallGenerators m -> proxy a -> m a
+getSmallGenerator dd (l, r) a = unSomeData $
+  case index dd #! typeRep a of
+    Right i -> (r #! i)
+    Left j -> (l #! j)
+
 -- * General helper functions
 
-frequencyWith :: Monad m
-  => ((Double, Double) -> m Double) -> [(Double, m a)] -> m a
-frequencyWith getRandomR as = do
-  x <- getRandomR (0, total)
-  select x as
+frequencyWith
+  :: (Show r, Ord r, Num r, Monad m) => (r -> m r) -> [(r, m a)] -> m a
+frequencyWith _ [(_, a)] = a
+frequencyWith randomR as = randomR total >>= select as
   where
     total = (sum . fmap fst) as
-    select x ((w, a) : as)
-      | x <= w = a
-      | otherwise = select (x - w) as
-    select _ _ = error "Exhausted choices."
+    select ((w, a) : as) x
+      | x < w = a
+      | otherwise = select as (x - w)
+    select _ _ = (snd . head) as
+    -- That should not happen in theory, but floating point might be funny.
 
 (#!) :: (?loc :: CallStack, Eq k, Hashable k)
   => HashMap k v -> k -> v

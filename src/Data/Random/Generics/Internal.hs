@@ -27,7 +27,8 @@ makeGenerator primRandom aliases a = ((minSize, maxSize'), makeGenerator')
     minSize = order dd #! i
     maxSize' = HashMap.lookup i (degree dd)
     makeGenerator' _ (Just size)
-      | size <= minSize = error "Target size too small."
+      | size == minSize = smallGenerator
+      | size < minSize = error "Target size too small."
       | Just maxSize <- maxSize', size >= maxSize =
         error "Target size too large."
     makeGenerator' _ Nothing | Just _ <- maxSize' =
@@ -37,6 +38,7 @@ makeGenerator primRandom aliases a = ((minSize, maxSize'), makeGenerator')
         dd' = iterate point dd !! k
         oracle = makeOracle dd' t size'
         generators = makeGenerators dd' oracle primRandom
+    smallGenerator = getSmallGenerator dd (smallGenerators dd primRandom) a
 
 type AliasR m = Alias (RejectT m)
 
@@ -84,7 +86,8 @@ liftPrimRandom
   :: (MonadTrans t, Monad m) => PrimRandom m -> PrimRandom (t m)
 liftPrimRandom PrimRandom{..} = PrimRandom
   (lift incr)
-  (fmap lift getRandomR_)
+  (fmap lift doubleR)
+  (fmap lift integerR)
   (lift int)
   (lift double)
   (lift char)

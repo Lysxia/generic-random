@@ -34,8 +34,7 @@ pointRejectT size =
   generator_ asGen [] 1 (Just size) (tolerance epsilon size)
 
 main = defaultMain $
-  [5 .. 10] >>= \e ->
-    let n = 2 ^ e in
+  0 : [2 ^ e | e <- [5 .. 10]] >>= \n ->
     [ bench ("reject " ++ show n) $
         nfGen (rejectT n)
     , bench ("reject-simple " ++ show n) $

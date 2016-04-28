@@ -49,8 +49,8 @@ pointedGenerator primRandom aliases = \size ->
       where
         maxSize = fromMaybe maxBound maxSize'
         ltMaxSize = (< toInteger maxSize_)
-        maxSize_ = maxSize - minSize - 1
-    pow2s = [ 2 ^ e | e <- [0 :: Int ..] ]
+        maxSize_ = max 0 (maxSize - minSize - 1)
+    pow2s = 0 : [ 2 ^ e | e <- [0 :: Int ..] ]
 
 -- * Fixed size
 
@@ -74,16 +74,18 @@ simpleGenerator' primRandom aliases size =
 generator_ :: (Data a, Monad m)
   => PrimRandom m -> [AliasR m] -> Int -> Maybe Size -> (Size, Size) -> m a
 generator_ primRandom aliases = \k size ->
-  generator' k (fmap clamp size) . bimap clamp clamp
+  generator' k (fmap clamp' size) . bimap clamp clamp
   where
     ((minSize, maxSize'), generator') = ceiledRejectionSampler primRandom aliases []
-    clamp x = maybe id min maxSize' (minSize + x)
+    clamp' = maybe id (min . max minSize . subtract 1) maxSize' . (minSize +)
+    clamp = maybe id min maxSize' . (minSize +)
 
 -- | Dictionary for QuickCheck's 'Gen'.
 asGen :: PrimRandom Gen
 asGen = PrimRandom
   (return ())
-  choose
+  (\x -> choose (0, x))
+  (\x -> choose (0, x-1))
   arbitrary
   arbitrary
   arbitrary
@@ -92,7 +94,8 @@ asGen = PrimRandom
 asMonadRandom :: MonadRandom m => PrimRandom m
 asMonadRandom = PrimRandom
   (return ())
-  getRandomR
+  (\x -> getRandomR (0, x))
+  (\x -> getRandomR (0, x-1))
   getRandom
   getRandom
   getRandom
