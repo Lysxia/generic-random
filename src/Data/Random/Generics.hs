@@ -1,33 +1,36 @@
 -- | Generic Boltzmann samplers.
---
--- = Size
---
--- The size of a value is its number of constructors.
---
--- Below, however, the 'Size' parameter
---
--- @
---   type 'Size' = Int
--- @
---
--- is interpreted as the difference
--- between the size of the smallest value and the desired approximate size.
---
--- For example, values of type @Either () [Bool]@ have at least two constructors,
--- so
---
--- @
---   'generator' 'asGen' delta :: Gen (Either () [Bool])
--- @
---
--- will target sizes close to @2 + delta@;
--- the offset becomes less noticeable as @delta@ grows to infinity.
---
--- This default behavior makes better use of the domain of sizes when used in
--- combination with the 'sized' combinator, so that QuickCheck generates
--- non-trivial data even at very small size values.
 
-module Data.Random.Generics where
+module Data.Random.Generics (
+  Size,
+  -- * Main functions
+  -- $sized
+  generator,
+  pointedGenerator,
+  -- ** Fixed size
+  -- $fixed
+  simpleGenerator',
+  pointedGenerator',
+  -- * Generators with aliases
+  -- $aliases
+  generatorWith,
+  pointedGeneratorWith,
+  -- ** Fixed size
+  simpleGeneratorWith',
+  pointedGeneratorWith',
+  -- * Auxiliary definitions
+  -- ** Dictionaries
+  asGen,
+  asMonadRandom,
+  PrimRandom,
+  -- ** Alias
+  alias,
+  aliasR,
+  alias',
+  Alias,
+  AliasR,
+  -- ** Internal
+  generator_
+  ) where
 
 import Data.Bifunctor
 import Data.Data
@@ -37,8 +40,8 @@ import Control.Monad.Trans
 import Control.Monad.Random
 import Test.QuickCheck
 import Data.Random.Generics.Internal
-import Data.Random.Generics.Boltzmann.Oracle
-import Data.Random.Generics.Boltzmann.Types
+import Data.Random.Generics.Internal.Oracle
+import Data.Random.Generics.Internal.Types
 
 -- * Main functions
 

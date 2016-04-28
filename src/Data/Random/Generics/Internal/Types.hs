@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, GADTs, ScopedTypeVariables, ImplicitParams #-}
 {-# LANGUAGE TypeOperators #-}
-module Data.Random.Generics.Boltzmann.Types where
+module Data.Random.Generics.Internal.Types where
 
 import Data.Data
 import GHC.Stack ( CallStack, showCallStack )
@@ -17,6 +17,7 @@ instance Show (SomeData m) where
 data Alias m where
   Alias :: (Data a, Data b) => !(m a -> m b) -> Alias m
 
+-- | Dummy instance for debugging.
 instance Show (Alias m) where
   show _ = "Alias"
 

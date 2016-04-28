@@ -6,11 +6,29 @@ import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Data.Data
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Random.Generics.Boltzmann.Oracle
-import Data.Random.Generics.Boltzmann.Types
+import Data.Random.Generics.Internal.Oracle
+import Data.Random.Generics.Internal.Types
 
 -- * Helper functions
 
+-- | The size of a value is its number of constructors.
+--
+-- Here, however, the 'Size' type is interpreted as the difference
+-- between the size of the smallest value and the desired approximate size.
+--
+-- For example, values of type @Either () [Bool]@ have at least two constructors,
+-- so
+--
+-- @
+--   'Data.Random.Generics.generator' asGen delta :: Gen (Either () [Bool])
+-- @
+--
+-- will target sizes close to @2 + delta@;
+-- the offset becomes less noticeable as @delta@ grows to infinity.
+--
+-- This default behavior makes better use of the domain of sizes when used in
+-- combination with the 'Test.QuickCheck.sized' combinator, so that QuickCheck
+-- generates non-trivial data even at very small size values.
 type Size = Int
 
 makeGenerator :: (Data a, Monad m)

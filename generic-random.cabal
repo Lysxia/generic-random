@@ -18,9 +18,9 @@ library
   exposed-modules:
     Data.Random.Generics
     Data.Random.Generics.Internal
-    Data.Random.Generics.Boltzmann.Oracle
-    Data.Random.Generics.Boltzmann.Solver
-    Data.Random.Generics.Boltzmann.Types
+    Data.Random.Generics.Internal.Oracle
+    Data.Random.Generics.Internal.Solver
+    Data.Random.Generics.Internal.Types
   build-depends:
     base >= 4.8 && < 5,
     containers,
@@ -36,17 +36,6 @@ library
     QuickCheck
   default-language:    Haskell2010
   ghc-options: -Wall -fno-warn-name-shadowing
-
-test-suite test-gr
-  type:             exitcode-stdio-1.0
-  hs-source-dirs:   test
-  main-is:          Spec.hs
-  default-language: Haskell2010
-  build-depends:
-    base,
-    generic-random,
-    hmatrix,
-    HUnit
 
 benchmark bench-binarytree
   type:             exitcode-stdio-1.0

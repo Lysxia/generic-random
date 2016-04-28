@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric, ImplicitParams #-}
 {-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
-module Data.Random.Generics.Boltzmann.Oracle where
+module Data.Random.Generics.Internal.Oracle where
 
 import Control.Applicative
 import Control.Monad
@@ -17,8 +17,8 @@ import qualified Data.Vector.Storable as S
 import GHC.Generics ( Generic )
 import GHC.Stack ( CallStack, showCallStack )
 import Numeric.AD
-import Data.Random.Generics.Boltzmann.Types
-import Data.Random.Generics.Boltzmann.Solver
+import Data.Random.Generics.Internal.Types
+import Data.Random.Generics.Internal.Solver
 
 -- | We build a dictionary which reifies type information in order to
 -- create a Boltzmann generator.
