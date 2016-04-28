@@ -74,11 +74,10 @@ simpleGenerator' primRandom aliases size =
 generator_ :: (Data a, Monad m)
   => PrimRandom m -> [AliasR m] -> Int -> Maybe Size -> (Size, Size) -> m a
 generator_ primRandom aliases = \k size ->
-  generator' k (fmap clamp' size) . bimap clamp clamp
+  generator' k (fmap clamp size) . bimap clamp clamp
   where
     ((minSize, maxSize'), generator') = ceiledRejectionSampler primRandom aliases []
     clamp x = maybe id min maxSize' (minSize + x)
-    clamp' x = maybe id (min . subtract 1) maxSize' (minSize + x + 1)
 
 -- | Dictionary for QuickCheck's 'Gen'.
 asGen :: PrimRandom Gen

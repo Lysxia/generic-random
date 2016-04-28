@@ -26,6 +26,7 @@ library
     hashable,
     unordered-containers,
     ieee754,
+    ad,
     hmatrix,
     vector,
     mtl,

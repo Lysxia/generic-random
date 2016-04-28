@@ -7,15 +7,16 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.AEq ( (~==) )
 import Data.Data
 import Data.Hashable ( Hashable )
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe ( fromJust, isJust )
-import qualified Data.Vector.Storable as V
+import qualified Data.Vector as V
+import qualified Data.Vector.Storable as S
 import GHC.Generics ( Generic )
 import GHC.Stack ( CallStack, showCallStack )
+import Numeric.AD
 import Data.Random.Generics.Boltzmann.Types
 import Data.Random.Generics.Boltzmann.Solver
 
@@ -115,9 +116,6 @@ primOrder = 1
 
 primlCoef :: Integer
 primlCoef = 1
-
-primExp :: (Eq a, Num a) => Exp a
-primExp = fromInteger primlCoef * X 0 ^ primOrder
 
 -- | The type of the first argument of @Data.Data.gunfold@.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
@@ -307,11 +305,11 @@ type Oracle = HashMap C Double
 -- /Boltzmann Oracle for Combinatorial Systems/,
 -- C. Pivoteau, B. Salvy, M. Soria.
 makeOracle :: DataDef m -> TypeRep -> Maybe Int -> Oracle
-makeOracle dd t size' =
+makeOracle dd0 t size' =
   seq v
-  HashMap.fromList (zip cs (V.toList v))
+  HashMap.fromList (zip cs (S.toList v))
   where
-    DataDef{..} = if isJust size' then point dd else dd
+    dd@DataDef{..} = if isJust size' then point dd0 else dd0
     cs = flip C <$> [0 .. points] <*> [0 .. count - 1]
     m = count * (points + 1)
     k = points - 1
@@ -320,50 +318,42 @@ makeOracle dd t size' =
       Right i -> i
     checkSize (Just size) (Just ys) = fromIntegral size >= size_
       where
-        size_ = ys ! j' / ys ! j
+        size_ = ys S.! j' / ys S.! j
         j = dd ? C i k
         j' = dd ? C i (k + 1)
     checkSize Nothing (Just _) = True
     checkSize _ Nothing = False
     -- Equations defining C_i(x) for all types with indices i
-    es = fmap (toEquation dd) (HashMap.toList types)
-    eval' x = solveEquations defSolveArgs es' (V.replicate m 0)
+    phis :: Num a => V.Vector (a -> V.Vector a -> a)
+    phis = V.fromList [ phi dd c (types #! c) | c <- listCs dd ]
+    eval' x = fixedPoint defSolveArgs phi' (S.replicate m 0)
       where
-        es' = fmap (\(y := fx) -> y := subst1 (-1) x fx) es
+        phi' :: (Mode a, Scalar a ~ Double) => V.Vector a -> V.Vector a
+        phi' y = fmap (\f -> f (auto x) y) phis
     v = fromJust (search eval' (checkSize size'))
 
--- | Equation defining the generating function @C_i[k](x)@ of a type/pointing.
-toEquation
-  :: (Eq a, Num a) => DataDef m -> (C, [(Integer, constr, [C'])]) -> Equation a
-toEquation dd@DataDef{..} (c@(C i _), tyInfo) =
-  X (dd ? c) := rhs tyInfo
+-- | Generating function definition. This defines a @Phi_i[k]@ function
+-- associated with the @k@-th pointing of the type at index @i@, such that:
+--
+-- > C_i[k](x)
+-- >   = Phi_i[k](x, C_0[0](x), ..., C_(n-1)[0](x),
+-- >              ..., C_0[k](x), ..., C_(n-1)[k](x))
+--
+-- Primitive datatypes have @C(x) = x@: they are considered as
+-- having a single object ('lCoef') of size 1 ('order')).
+phi :: Num a => DataDef m -> C -> [(Integer, constr, [C'])]
+  -> a -> V.Vector a -> a
+phi DataDef{..} (C i _) [] =
+  case xedni #! i of
+    SomeData a ->
+      case (dataTypeRep . withProxy dataTypeOf) a of
+        AlgRep _ -> \_ _ -> 0
+        _ -> \x _ -> fromInteger primlCoef * x ^ primOrder
+phi dd@DataDef{..} _ tyInfo = f
   where
-    rhs [] = case xedni #! i of
-      SomeData a ->
-        case (dataTypeRep . withProxy dataTypeOf) a of
-          AlgRep _ -> Zero
-          _ -> primExp
-    rhs tyInfo = X (-1) * (sum . fmap toProd) tyInfo
-    toProd (w, _, js) = fromInteger w * product [ X (dd ? j) | (_, j) <- js ]
-
--- | Assuming @p . f@ is satisfied only for positive values in some interval
--- @(0, r]@, find @f r@.
-search :: (Double -> a) -> (a -> Bool) -> a
-search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
-  where
-    search' y (x : xs@(x' : _))
-      | p y' = search' y' xs
-      | otherwise = search'' y x x'
-      where y' = f x'
-    search' _ _ = error "Solution not found. Uncontradictable predicate?"
-    search'' y x x'
-      | x ~== x' = y
-      | p y_ = search'' y_ x_ x'
-      | otherwise = search'' y x x_
-      where
-        x_ = (x + x') / 2
-        y_ = f x_
-    e0 = error "Solution not found. Unsatisfiable predicate?"
+    f x y = x * (sum . fmap (toProd y)) tyInfo
+    toProd y (w, _, js) =
+      fromInteger w * product [ y V.! (dd ? j) | (_, j) <- js ]
 
 -- | Maps a key representing a type @a@ (or one of its pointings) to a
 -- generator @m a@.
@@ -427,9 +417,14 @@ makeGenerators DataDef{..} oracle PrimRandom{..} =
 (?) :: DataDef m -> C -> Int
 dd ? C i k = i + k * count dd
 
+-- | > dd ? (listCs dd !! i) = i
+listCs :: DataDef m -> [C]
+listCs dd = liftA2 (flip C) [0 .. points dd] [0 .. count dd - 1]
+
 ix :: C -> Int
 ix (C i _) = i
 
+-- | > dd ? (dd ?! i) = i
 (?!) :: DataDef m -> Int -> C
 dd ?! j = C i k
   where (k, i) = j `divMod` count dd
@@ -460,11 +455,6 @@ frequencyWith getRandomR as = do
 h #! k = HashMap.lookupDefault (e ?loc) k h
   where
     e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc)
-
-(!) :: (?loc :: CallStack, V.Storable a)
-  => V.Vector a -> Int -> a
-v ! i | 0 <= i && i < V.length v = v V.! i
-_ ! _ = error ("Vector.(!): index out of bounds\n" ++ showCallStack ?loc)
 
 -- | @partitions k n@: lists of non-negative integers of length @n@ with sum
 -- less than or equal to @k@.
