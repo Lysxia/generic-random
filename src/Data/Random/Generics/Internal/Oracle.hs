@@ -36,8 +36,6 @@ import Data.Random.Generics.Internal.Solver
 --
 -- where @C_i[k]'@ is the derivative of @C_i[k]@. See also 'point'.
 --
--- @X (-1)@ is the parameter @x@ of the generating functions.
---
 -- The /order/ (or /valuation/) of a power series is the index of the first
 -- non-zero coefficient, called the /leading coefficient/.
 
@@ -359,10 +357,9 @@ phi dd@DataDef{..} _ tyInfo = f
 -- generator @m a@.
 type Generators m = (HashMap AC (SomeData m), HashMap C (SomeData m))
 
--- | Generators of random primitive values and other useful actions to
--- inject in our generator.
+-- | Basic component of random generators.
 --
--- This allows to remain generic over 'MonadRandom' instances and
+-- This makes the implementation abstract over both 'MonadRandom' instances and
 -- 'Test.QuickCheck.Gen'.
 data PrimRandom m = PrimRandom
   { incr :: m () -- Called for every constructor
@@ -404,8 +401,9 @@ makeGenerators DataDef{..} oracle pr@PrimRandom{..} =
 type SmallGenerators m =
   (HashMap Aliased (SomeData m), HashMap Ix (SomeData m))
 
--- | Generators of values of minimal sizes
-smallGenerators :: forall m. Monad m => DataDef m -> PrimRandom m -> SmallGenerators m
+-- | Generators of values of minimal sizes.
+smallGenerators
+  :: forall m. Monad m => DataDef m -> PrimRandom m -> SmallGenerators m
 smallGenerators DataDef{..} pr@PrimRandom{..} = (generatorsL, generatorsR)
   where
     f i (SomeData a) = SomeData $ incr >>
