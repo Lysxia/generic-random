@@ -3,6 +3,7 @@ Generic random generators
 
 Define sized random generators for almost any type.
 
+```haskell
     {-# LANGUAGE DeriveDataTypeable #-}
     import Data.Data
     import Test.QuickCheck
@@ -15,6 +16,7 @@ Define sized random generators for almost any type.
       arbitrary = sized (generator asGen)
 
     main = sample (arbitrary :: Gen Term)
+```
 
 - Objects of the same size (number of constructors) occur with the same
   probability (see Duchon et al., references below).
