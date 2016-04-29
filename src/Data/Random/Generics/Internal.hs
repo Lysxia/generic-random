@@ -9,32 +9,15 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Random.Generics.Internal.Oracle
 import Data.Random.Generics.Internal.Types
 
--- * Helper functions
-
--- | The size of a value is its number of constructors.
---
--- Here, however, the 'Size' type is interpreted as the difference
--- between the size of the smallest value and the desired approximate size.
---
--- For example, values of type @Either () [Bool]@ have at least two constructors,
--- so
---
--- @
---   'Data.Random.Generics.generator' asGen delta :: Gen (Either () [Bool])
--- @
---
--- will target sizes close to @2 + delta@;
--- the offset becomes less noticeable as @delta@ grows to infinity.
---
--- This default behavior makes better use of the domain of sizes when used in
--- combination with the 'Test.QuickCheck.sized' combinator, so that QuickCheck
--- generates non-trivial data even at very small size values.
+-- | Size as the number of constructors.
 type Size = Int
+
+-- * Helper functions
 
 makeGenerator :: (Data a, Monad m)
   => PrimRandom m -> [Alias m] -> proxy a
-  -> ((Size, Maybe Size), Int -> Maybe Size -> m a)
-makeGenerator primRandom aliases a = ((minSize, maxSize'), makeGenerator')
+  -> ((Size, Maybe Size), Int -> Maybe Double -> m a)
+makeGenerator primRandom aliases a = ((minSize, maxSize), makeGenerator')
   where
     dd = collectTypes aliases a
     -- We need the next pointing to capture the average size in an equation.
@@ -42,28 +25,28 @@ makeGenerator primRandom aliases a = ((minSize, maxSize'), makeGenerator')
     i = case index dd #! t of
       Left j -> fst (xedni' dd #! j)
       Right i -> i
-    minSize = order dd #! i
-    maxSize' = HashMap.lookup i (degree dd)
+    minSize = natToInt $ fst (lTerm dd #! i)
+    maxSize = HashMap.lookup i (degree dd)
     makeGenerator' _ (Just size)
-      | size == minSize = smallGenerator
-      | size < minSize = error "Target size too small."
-      | Just maxSize <- maxSize', size >= maxSize =
+      | size <= fromIntegral minSize = smallGenerator
+      | Just maxSize <- maxSize, size >= fromIntegral maxSize =
         error "Target size too large."
-    makeGenerator' _ Nothing | Just _ <- maxSize' =
+    makeGenerator' _ Nothing | Just _ <- maxSize =
       error "Cannot make singular sampler: this type is finite."
     makeGenerator' k size' = getGenerator dd' generators a k
       where
-        dd' = iterate point dd !! k
+        dd' = dds !! k
         oracle = makeOracle dd' t size'
         generators = makeGenerators dd' oracle primRandom
     smallGenerator = getSmallGenerator dd (smallGenerators dd primRandom) a
+    dds = iterate point dd
 
 type AliasR m = Alias (RejectT m)
 
 ceiledRejectionSampler
   :: (Data a, Monad m)
   => PrimRandom m -> [AliasR m] -> proxy a
-  -> ((Size, Maybe Size), Int -> Maybe Size -> (Size, Size) -> m a)
+  -> ((Size, Maybe Size), Int -> Maybe Double -> (Size, Size) -> m a)
 ceiledRejectionSampler primRandom aliases a =
   (range, (fmap . fmap) (flip runRejectT) makeGenerator')
   where
@@ -74,10 +57,10 @@ epsilon :: Double
 epsilon = 0.1
 
 -- | > (size * (1 - epsilon), size * (1 + epsilon))
-tolerance :: Double -> Size -> (Size, Size)
+tolerance :: Double -> Int -> (Size, Size)
 tolerance epsilon size = (size - delta, size + delta)
   where
-    delta = floor (fromIntegral size * epsilon)
+    delta = ceiling (fromIntegral size * epsilon)
 
 type RejectT m = ReaderT Size (StateT Size (MaybeT m))
 

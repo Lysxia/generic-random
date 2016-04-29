@@ -1,7 +1,7 @@
 -- | Generic Boltzmann samplers.
 
 module Data.Random.Generics (
-  Size,
+  Size',
   -- * Main functions
   -- $sized
   generator,
@@ -32,7 +32,6 @@ module Data.Random.Generics (
   generator_
   ) where
 
-import Data.Bifunctor
 import Data.Data
 import Data.Foldable
 import Data.Maybe
@@ -42,6 +41,32 @@ import Test.QuickCheck
 import Data.Random.Generics.Internal
 import Data.Random.Generics.Internal.Oracle
 import Data.Random.Generics.Internal.Types
+
+-- | The size of a value is its number of constructors.
+--
+-- Here, however, the 'Size'' type is interpreted so as to make better use of
+-- QuickCheck's size parameter, provided by the 'Test.QuickCheck.sized'
+-- combinator, so that we generate non-trivial data even at very small
+-- size values.
+--
+-- For example, values of type @Either () [Bool]@ have at least two constructors,
+-- so
+--
+-- @
+--   'generator' asGen delta :: Gen (Either () [Bool])
+-- @
+--
+-- will target sizes close to @2 + delta@;
+-- the offset becomes less noticeable as @delta@ grows to infinity.
+--
+-- For types with a finite size interval @[minSize, maxSize]@, the target
+-- expected size is obtained from a 'Size'' in @[0, 99]@ by an affine mapping.
+type Size' = Int
+
+rescale :: (Int, Maybe Int) -> Size' -> Double
+rescale (minSize, Just maxSize) size' =
+  fromIntegral minSize + fromIntegral (min 99 size' * (maxSize - minSize)) / 100
+rescale (minSize, Nothing) size' = fromIntegral (minSize + size')
 
 -- * Main functions
 
@@ -69,7 +94,7 @@ import Data.Random.Generics.Internal.Types
 --   instance 'Arbitrary' MyT where
 --     'arbitrary' = 'sized' ('generator' 'asGen')
 -- @
-generator :: (Data a, Monad m) => PrimRandom m -> Size -> m a
+generator :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
 generator = generatorWith []
 
 -- | @
@@ -108,7 +133,7 @@ generator = generatorWith []
 
 -- Oracles are computed only for sizes that are a power of two away from
 -- the minimum size of the datatype @minSize + 2 ^ e@.
-pointedGenerator :: (Data a, Monad m) => PrimRandom m -> Size -> m a
+pointedGenerator :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
 pointedGenerator = pointedGeneratorWith []
 
 -- ** Fixed size
@@ -121,11 +146,11 @@ pointedGenerator = pointedGeneratorWith []
 -- The overhead of computing the "oracles" has not been measured yet.
 
 -- | Generator of pointed values.
-pointedGenerator' :: (Data a, Monad m) => PrimRandom m -> Size -> m a
+pointedGenerator' :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
 pointedGenerator' = pointedGeneratorWith' []
 
 -- | Ceiled rejection sampler with given average size.
-simpleGenerator' :: (Data a, Monad m) => PrimRandom m -> Size -> m a
+simpleGenerator' :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
 simpleGenerator' = simpleGeneratorWith' []
 
 -- * Generators with aliases
@@ -172,55 +197,60 @@ simpleGenerator' = simpleGeneratorWith' []
 -- @
 
 generatorWith
-  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size -> m a
+  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size' -> m a
 generatorWith aliases primRandom =
   generator_ primRandom aliases 0 Nothing . tolerance epsilon
 
 pointedGeneratorWith
-  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size -> m a
-pointedGeneratorWith aliases primRandom = \size ->
-  snd . fromMaybe (last generators) . find ((>= size) . fst) $ generators
+  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
+pointedGeneratorWith aliases primRandom =
+  snd . fromMaybe (last generators)
+    . \size' -> find ((>= size') . fst) generators
   where
-    ((minSize, maxSize'), makeGenerator') =
+    (range@(minSize, maxSize'), makeGenerator') =
       makeGenerator primRandom aliases []
     generators =
-      [ (size, makeGenerator' 1 (Just (minSize + size))) | size <- sizes ]
-    sizes = fmap fromInteger (takeWhile ltMaxSize pow2s) ++ [ maxSize_ ]
-      where
-        maxSize = fromMaybe maxBound maxSize'
-        ltMaxSize = (< toInteger maxSize_)
-        maxSize_ = max 0 (maxSize - minSize - 1)
-    pow2s = 0 : [ 2 ^ e | e <- [0 :: Int ..] ]
+      [ (size', makeGenerator' 1 (Just (rescale range size'))) | size' <- sizes' ]
+    sizes' = 0 : case maxSize' of
+      Nothing -> pow2s
+      Just maxSize | maxSize == minSize -> []
+      Just _ -> takeWhile (< 100) pow2s ++ [100]
+    pow2s = [ 2 ^ e | e <- [0 :: Int ..] ]
 
 -- ** Fixed size
 
 pointedGeneratorWith'
-  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size -> m a
-pointedGeneratorWith' aliases primRandom size =
-  snd (makeGenerator primRandom aliases []) 1 (Just size)
+  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
+pointedGeneratorWith' aliases primRandom size' =
+  makeGenerator' 1 (Just (rescale range size'))
+  where
+    (range, makeGenerator') =
+      makeGenerator primRandom aliases []
 
 simpleGeneratorWith'
-  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size -> m a
-simpleGeneratorWith' aliases primRandom size =
-  generator_ primRandom aliases 0 (Just size) (tolerance epsilon size)
+  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size' -> m a
+simpleGeneratorWith' aliases primRandom size' =
+  generator_ primRandom aliases 0 (Just size') (tolerance epsilon size')
 
 -- * Auxiliary definitions
 
 -- | Boltzmann sampler, singular or with target average size, and rejecting
 -- outside the tolerance interval.
 --
--- The target size and the tolerance interval are shifted and clamped to the actual
--- size range of the datatype. (See Size section above.)
---
 -- Used to implement 'generator' and 'simpleGenerator''.
 generator_ :: (Data a, Monad m)
-  => PrimRandom m -> [AliasR m] -> Int -> Maybe Size -> (Size, Size) -> m a
-generator_ primRandom aliases = \k size ->
-  generator' k (fmap clamp' size) . bimap clamp clamp
+  => PrimRandom m -> [AliasR m] -> Int -> Maybe Size'
+  -> (Size', Size') -> m a
+generator_ primRandom aliases = \k size' ->
+  let size = fmap (rescale range) size' in
+  generator' k size . rescaleInterval
   where
-    ((minSize, maxSize'), generator') = ceiledRejectionSampler primRandom aliases []
-    clamp' = maybe id (min . max minSize . subtract 1) maxSize' . (minSize +)
-    clamp = maybe id min maxSize' . (minSize +)
+    (range, generator') = ceiledRejectionSampler primRandom aliases []
+    rescaleInterval (a', b') = (a, b)
+      where
+        a = floor (rescale range a')
+        b | Just maxSize <- snd range, b' == 100 = maxSize
+          | otherwise = ceiling (rescale range b')
 
 -- ** Dictionaries
 

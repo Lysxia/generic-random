@@ -5,13 +5,16 @@ module Data.Random.Generics.Internal.Oracle where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Bifunctor
 import Data.Data
 import Data.Hashable ( Hashable )
 import Data.HashMap.Lazy ( HashMap )
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe ( fromJust, isJust )
+import Data.Monoid
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import GHC.Generics ( Generic )
@@ -53,11 +56,12 @@ data DataDef m = DataDef
   -- associated to it by 'xedni'.
   --
   -- The integer is a multiplicity which can be > 1 for pointings.
-  , order :: HashMap Ix Int
-  -- ^ Orders of the generating functions @C_i[k](x)@: smallest size of
-  -- objects of a given type.
-  , lCoef :: HashMap C Integer
-  -- ^ Leading coefficients: number of objects of smallest size.
+  , lTerm :: HashMap Ix (Nat, Integer)
+  -- ^ Leading term @a * x ^ u@ of the generating functions @C_i[k](x)@ in the
+  -- form (u, a).
+  --
+  -- [Order @u@] Smallest size of objects of a given type.
+  -- [Leading coefficient @a@] number of objects of smallest size.
   , degree :: HashMap Ix Int
   -- ^ Degrees of the generating functions, when applicable: greatest size of
   -- objects of a given type.
@@ -84,6 +88,21 @@ instance Hashable Aliased
 
 type Ix = Int
 
+data Nat = Zero | Succ Nat
+  deriving (Eq, Ord, Show)
+
+instance Monoid Nat where
+  mempty = Zero
+  mappend (Succ n) = Succ . mappend n
+  mappend Zero = id
+
+natToInt :: Nat -> Int
+natToInt Zero = 0
+natToInt (Succ n) = 1 + natToInt n
+
+infinity :: Nat
+infinity = Succ infinity
+
 dataDef :: [Alias m] -> DataDef m
 dataDef as = DataDef
   { count = 0
@@ -92,8 +111,7 @@ dataDef as = DataDef
   , xedni = HashMap.empty
   , xedni' = xedni'
   , types = HashMap.empty
-  , order = HashMap.empty
-  , lCoef = HashMap.empty
+  , lTerm = HashMap.empty
   , degree = HashMap.empty
   } where
     xedni' = HashMap.fromList (fmap (\(i, a) -> (i, (-1, a))) as')
@@ -108,9 +126,12 @@ collectTypes :: Data a => [Alias m] -> proxy a -> DataDef m
 collectTypes as a = collectTypesM a `execState` dataDef as
 
 -- | Primitive datatypes have @C(x) = x@: they are considered as
--- having a single object ('lCoef') of size 1 ('order')).
+-- having a single object (@lCoef@) of size 1 (@order@)).
 primOrder :: Int
 primOrder = 1
+
+primOrder' :: Nat
+primOrder' = Succ Zero
 
 primlCoef :: Integer
 primlCoef = 1
@@ -119,39 +140,35 @@ primlCoef = 1
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
 
 collectTypesM :: Data a => proxy a
-  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
+  -> State (DataDef m) (Either Aliased Ix, ((Nat, Integer), Maybe Int))
 collectTypesM a = chaseType a (const id)
 
 chaseType :: Data a => proxy a
   -> ((Maybe (Alias m), Ix) -> DataDef m -> DataDef m)
-  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
+  -> State (DataDef m) (Either Aliased Ix, ((Nat, Integer), Maybe Int))
 chaseType a k = do
   let t = typeRep a
   DataDef{..} <- get
   let
     lookup i r =
       let
-        order_i = order #! i
-        lCoef_i = lCoef #! C i 0
+        lTerm_i = lTerm #! i
         degree_i = HashMap.lookup i degree
-      in return (r, (order_i, lCoef_i, degree_i))
+      in return (r, (lTerm_i, degree_i))
   case HashMap.lookup t index of
     Nothing -> do
       let i = count
-      modify $ \dd -> dd
+      modify $ \dd -> k (Nothing, i) dd
         { count = i + 1
         , index = HashMap.insert t (Right i) index
         , xedni = HashMap.insert i (someData' a) xedni
-        , order = HashMap.insert i (error "Unknown order") order
-        , lCoef = HashMap.insert (C i 0) 0 lCoef
         }
-      modify (k (Nothing, i))
-      collectTypesM' a i -- Updates order and lCoef
+      traverseType a i -- Updates lTerm and degree
     Just (Right i) -> lookup i (Right i)
     Just (Left j) ->
       case xedni' #! j of
         (-1, Alias f) -> do
-          (_, old) <- chaseType (ofType f) $ \(alias, i) ->
+          (_, ld) <- chaseType (ofType f) $ \(alias, i) ->
             let
               alias' = case alias of
                 Nothing -> Alias f
@@ -159,75 +176,87 @@ chaseType a k = do
             in
             k (Just alias', i) . \dd -> dd
               { xedni' = HashMap.insert j (i, alias') xedni' }
-          return (Left j, old)
+          return (Left j, ld)
         (i, _) -> lookup i (Left j)
   where
     ofType :: (m a -> m b) -> m a
     ofType _ = undefined
 
 -- | Traversal of the definition of a datatype.
-collectTypesM'
+traverseType
   :: Data a => proxy a -> Ix
-  -> State (DataDef m) (Either Aliased Ix, (Int, Integer, Maybe Int))
-collectTypesM' a i = do
+  -> State (DataDef m) (Either Aliased Ix, ((Nat, Integer), Maybe Int))
+traverseType a i = do
   let d = withProxy dataTypeOf a
-  (types_i, old@(order_i, lCoef_i, degree_i)) <-
-    if isAlgType d then do
-      let
-        constrs = dataTypeConstrs d
-        collect
-          :: GUnfold (StateT
-            ([Either Aliased Ix], Int, Integer, Maybe Int)
-            (State (DataDef m)))
-        collect mkCon = do
-          f <- mkCon
-          let ofType :: (b -> a) -> Proxy b
-              ofType _ = Proxy
-              b = ofType f
-          (j, (order_, lead_, degree_)) <- lift (collectTypesM b)
-          modify $ \(js, order', lead', degree') ->
-            (j : js, order_ + order', lead_ * lead', liftA2 (+) degree_ degree')
-          return (withProxy f b)
-      cjolds <- forM constrs $ \constr -> do
-        (js, order', lead', degree') <-
-          gunfold collect return constr `proxyType` a
-            `execStateT` ([], 1, 1, Just 1)
-        dd <- get
-        let
-          c (Left j) = (Just j, C (fst (xedni' dd #! j)) 0)
-          c (Right i) = (Nothing, C i 0)
-        return ((1, constr, [ c j | j <- js]), (order', lead'), degree')
-      let
-        (types_i, ols, ds) = unzip3 cjolds
-        (order_i, lCoef_i) = minSum ols
-        degree_i = maxDegree ds
-      return (types_i, (order_i, lCoef_i, degree_i))
-    else
-      return ([], (primOrder, primlCoef, Just primOrder))
-  modify $ \dd@DataDef{..} -> dd
-    { types = HashMap.insert (C i 0) types_i types
-    , order = HashMap.insert i order_i order
-    , lCoef = HashMap.insert (C i 0) lCoef_i lCoef
-    , degree = maybe id (HashMap.insert i) degree_i degree
-    }
-  return (Right i, old)
+  mfix $ \ ~(_, (lTerm_i0, _)) -> do
+    modify $ \dd@DataDef{..} -> dd
+      { lTerm = HashMap.insert i lTerm_i0 lTerm
+      }
+    (types_i, ld@(_, degree_i)) <- traverseType' a d
+    modify $ \dd@DataDef{..} -> dd
+      { types = HashMap.insert (C i 0) types_i types
+      , degree = maybe id (HashMap.insert i) degree_i degree
+      }
+    return (Right i, ld)
 
--- | If @(o, l)@ represents a power series of order @o@ and leading coefficient
--- @l@, and similarly for @(o', l')@, this finds the order and leading
--- coefficient of their sum.
-minPlus :: (Ord int, Eq integer, Num integer)
-  => (int, integer) -> (int, integer) -> (int, integer)
-minPlus ol@(order, lCoef) ol'@(order', lCoef')
-  | lCoef' == 0 = ol
+traverseType'
+  :: Data a => proxy a -> DataType
+  -> State (DataDef m)
+      ([(Integer, Constr, [(Maybe Aliased, C)])], ((Nat, Integer), Maybe Int))
+traverseType' a d | isAlgType d = do
+  let
+    constrs = dataTypeConstrs d
+    collect
+      :: GUnfold (StateT
+        ([Either Aliased Ix], (Nat, Integer), Maybe Int)
+        (State (DataDef m)))
+    collect mkCon = do
+      f <- mkCon
+      let ofType :: (b -> a) -> Proxy b
+          ofType _ = Proxy
+          b = ofType f
+      (j, (lTerm_, degree_)) <- lift (collectTypesM b)
+      modify $ \(js, lTerm', degree') ->
+        (j : js, lMul lTerm_ lTerm', liftA2 (+) degree_ degree')
+      return (withProxy f b)
+  tlds <- forM constrs $ \constr -> do
+    (js, lTerm', degree') <-
+      gunfold collect return constr `proxyType` a
+        `execStateT` ([], (Zero, 1), Just 1)
+    dd <- get
+    let
+      c (Left j) = (Just j, C (fst (xedni' dd #! j)) 0)
+      c (Right i) = (Nothing, C i 0)
+    return ((1, constr, [ c j | j <- js]), lTerm', degree')
+  let
+    (types_i, ls, ds) = unzip3 tlds
+    lTerm_i = first Succ (lSum ls)
+    degree_i = maxDegree ds
+  return (types_i, (lTerm_i, degree_i))
+traverseType' _ _ =
+  return ([], ((primOrder', primlCoef), Just primOrder))
+
+-- | If @(u, a)@ represents a power series of leading term @a * x ^ u@, and
+-- similarly for @(u', a')@, this finds the leading term of their sum.
+lPlus :: (Nat, Integer) -> (Nat, Integer) -> (Nat, Integer)
+lPlus ol@(order, lCoef) ol'@(order', lCoef')
   | order < order' = ol
   | order > order' = ol'
   | otherwise = (order, lCoef + lCoef')
 
-minSum :: (Ord int, Bounded int, Eq integer, Num integer)
-  => [(int, integer)] -> (int, integer)
-minSum = foldl minPlus (maxBound, 0)
+-- | Sum of a list of series.
+lSum :: [(Nat, Integer)] -> (Nat, Integer)
+lSum [] = (infinity, 0)
+lSum ls = foldl1 lPlus ls
 
-maxDegree :: (Ord int, Bounded int) => [Maybe int] -> Maybe int
+-- | Leading term of a product of series.
+lMul :: (Nat, Integer) -> (Nat, Integer) -> (Nat, Integer)
+lMul (order, lCoef) (order', lCoef') = (order <> order', lCoef * lCoef')
+
+lProd :: [(Nat, Integer)] -> (Nat, Integer)
+lProd = foldl lMul (Zero, 1)
+
+maxDegree :: [Maybe Int] -> Maybe Int
 maxDegree = foldl (liftA2 max) (Just minBound)
 
 -- | Pointing operator.
@@ -276,11 +305,8 @@ point :: DataDef m -> DataDef m
 point dd@DataDef{..} = dd
   { points = points'
   , types = foldl g types [0 .. count-1]
-  , lCoef = foldl f lCoef [0 .. count-1]
   } where
     points' = points + 1
-    f lCoef i = HashMap.insert (C i points') (lCoef' i) lCoef
-    lCoef' i = (lCoef #! C i points) * toInteger (order #! i)
     g types i = HashMap.insert (C i points') (types' i) types
     types' i = types #! C i 0 >>= h
     h (_, constr, js) = do
@@ -302,7 +328,7 @@ type Oracle = HashMap C Double
 -- method, the convergence of which has been shown for relevant systems in
 -- /Boltzmann Oracle for Combinatorial Systems/,
 -- C. Pivoteau, B. Salvy, M. Soria.
-makeOracle :: DataDef m -> TypeRep -> Maybe Int -> Oracle
+makeOracle :: DataDef m -> TypeRep -> Maybe Double -> Oracle
 makeOracle dd0 t size' =
   seq v
   HashMap.fromList (zip cs (S.toList v))
@@ -314,7 +340,7 @@ makeOracle dd0 t size' =
     i = case index #! t of
       Left j -> fst (xedni' #! j)
       Right i -> i
-    checkSize (Just size) (Just ys) = fromIntegral size >= size_
+    checkSize (Just size) (Just ys) = size >= size_
       where
         size_ = ys S.! j' / ys S.! j
         j = dd ? C i k
@@ -410,14 +436,14 @@ smallGenerators DataDef{..} pr@PrimRandom{..} = (generatorsL, generatorsR)
       case types #! C i 0 of
         [] -> defGen pr
         tyInfo ->
-          let gs = (tyInfo >>= g (order #! i)) in
+          let gs = (tyInfo >>= g (fst (lTerm #! i))) in
           frequencyWith integerR gs `proxyType` a
-    g :: Data a => Int -> (Integer, Constr, [C']) -> [(Integer, m a)]
+    g :: Data a => Nat -> (Integer, Constr, [C']) -> [(Integer, m a)]
     g minSize (_, constr, js) =
-      guard (minSize == 1 + sum [ order #! i | (_, C i _) <- js ]) *>
+      guard (minSize == Succ size) *>
       [(weight, gunfold generate return constr `runReaderT` gs)]
       where
-        weight = product [ lCoef #! c | (_, c) <- js ]
+        (size, weight) = lProd [ lTerm #! i | (_, C i _) <- js ]
         gs = fmap lookup js
         lookup (j', C i _) = maybe (generatorsR #! i) (generatorsL #!) j'
     h (j, (i, Alias f)) = (j, applyCast f (generatorsR #! i))
@@ -500,11 +526,15 @@ partitions k n = do
   (p :) <$> partitions (k - p) (n - 1)
 
 -- | Multinomial coefficient.
+--
+-- > multinomial n ps == factorial n `div` product [factorial p | p <- ps]
 multinomial :: Int -> [Int] -> Integer
 multinomial _ [] = 1
 multinomial n (p : ps) = binomial n p * multinomial (n - p) ps
 
 -- | Binomial coefficient.
+--
+-- > binomial n k == factorial n `div` (factorial k * factorial (n-k))
 binomial :: Int -> Int -> Integer
 binomial = \n k -> pascal !! n !! k
   where
