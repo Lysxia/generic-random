@@ -44,22 +44,26 @@ import Data.Random.Generics.Internal.Types
 
 -- | The size of a value is its number of constructors.
 --
--- Here, however, the 'Size'' type is interpreted so as to make better use of
--- QuickCheck's size parameter, provided by the 'Test.QuickCheck.sized'
--- combinator, so that we generate non-trivial data even at very small
--- size values.
+-- Here, however, the 'Size'' type is interpreted differently to make better
+-- use of QuickCheck's size parameter, provided by the 'Test.QuickCheck.sized'
+-- combinator, so that we generate non-trivial data even at very small size
+-- values.
+--
+-- For infinite types, with objects of unbounded sizes @> minSize@, given a
+-- parameter @delta :: 'Size''@, the produced values have an average size close
+-- to @minSize + delta@.
 --
 -- For example, values of type @Either () [Bool]@ have at least two constructors,
 -- so
 --
 -- @
---   'generator' asGen delta :: Gen (Either () [Bool])
+--   'generator' 'asGen' delta :: 'Gen' (Either () [Bool])
 -- @
 --
 -- will target sizes close to @2 + delta@;
 -- the offset becomes less noticeable as @delta@ grows to infinity.
 --
--- For types with a finite size interval @[minSize, maxSize]@, the target
+-- For finite types with sizes in @[minSize, maxSize]@, the target
 -- expected size is obtained from a 'Size'' in @[0, 99]@ by an affine mapping.
 type Size' = Int
 
@@ -107,7 +111,8 @@ generator = generatorWith []
 -- It usually has a flatter distribution of sizes than a simple Boltzmann
 -- sampler, making it an efficient alternative to rejection sampling.
 --
--- It also works on more types, but relies on multiple oracles.
+-- It also works on more types, particularly lists and finite types,
+-- but relies on multiple oracles.
 --
 -- = Pointing
 --
@@ -143,7 +148,8 @@ pointedGenerator = pointedGeneratorWith []
 -- above. 'simpleGenerator'' works with slightly more types than 'generator',
 -- since it doesn't require the existence of a singularity.
 --
--- The overhead of computing the "oracles" has not been measured yet.
+-- The overhead of computing the "oracles" (if you plan to use these
+-- functions with 'sized') has not been measured yet.
 
 -- | Generator of pointed values.
 pointedGenerator' :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
@@ -186,8 +192,8 @@ simpleGenerator' = simpleGeneratorWith' []
 --     'generatorWith' as 'asGen' :: 'Size' -> 'Gen' (E Int)
 -- @
 --
--- Another use is to plug in user-defined generators where the default is not
--- satisfactory, for example, to get positive @Int@s:
+-- Another use case is to plug in user-defined generators where the default is
+-- not satisfactory, for example, to get positive @Int@s:
 --
 -- @
 --   let
@@ -282,9 +288,11 @@ asMonadRandom = PrimRandom
 
 -- ** Aliases
 
+-- | Main constructor for 'Alias'.
 alias :: (Monad m, Data a, Data b) => (a -> m b) -> Alias m
 alias = Alias . (=<<)
 
+-- | Main constructor for 'AliasR'.
 aliasR :: (Monad m, Data a, Data b) => (a -> m b) -> AliasR m
 aliasR = Alias . (=<<) . fmap (lift . lift . lift)
 
