@@ -8,7 +8,7 @@ import Data.Random.Generics
 import Control.Monad.Random
 
 gen :: IO [Int]
-gen = pointedGenerator asMonadRandom aliases 20
+gen = pointedGeneratorWith aliases asMonadRandom 20
   where
     aliases = [alias $ \() -> getRandomR (0, 100) :: IO Int]
 
