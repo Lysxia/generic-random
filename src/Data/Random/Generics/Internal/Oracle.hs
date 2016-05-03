@@ -345,7 +345,11 @@ makeOracle dd0 t size' =
     i = case index #! t of
       Left j -> fst (xedni' #! j)
       Right i -> i
-    checkSize (Just size) (Just ys) = size >= size_
+    checkSize (Just size) (Just ys) =
+      S.all (>= 0) ys
+      -- There may be solutions outside of the radius
+      -- of convergence, but with negative components.
+      && size >= size_
       where
         size_ = ys S.! j' / ys S.! j
         j = dd ? C i k
