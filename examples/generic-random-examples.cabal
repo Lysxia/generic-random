@@ -34,3 +34,15 @@ executable positive-ints-example
     MonadRandom,
     generic-random
   default-language: Haskell2010
+
+executable xml-example
+  main-is: xml.hs
+  ghc-options: -Wall
+  build-depends:
+    base,
+    QuickCheck,
+    quickcheck-instances,
+    text,
+    xml-conduit,
+    generic-random
+  default-language: Haskell2010
