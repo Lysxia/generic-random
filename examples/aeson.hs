@@ -8,8 +8,8 @@ import qualified Data.Text as Text
 import Test.QuickCheck
 import Data.Random.Generics
 
-genValue :: Int -> Gen Value
-genValue = pointedGeneratorWith aliases asGen
+instance Arbitrary Value where
+  arbitrary = sized $ pointedGeneratorWith aliases asGen
 
 aliases :: [Alias Gen]
 aliases =
@@ -17,8 +17,10 @@ aliases =
   , alias $ return . (Vector.fromList :: [Value] -> _)
   , alias $ \ () -> fmap (realToFrac :: Double -> Scientific) arbitrary
   , alias $ return . Text.pack
-  , alias $ \ ~[()] -> arbitrary :: Gen String
+  , alias $ (const arbitrary :: [()] -> Gen String)
   ]
 
 main :: IO ()
-main = sample (sized genValue)
+main = do
+  sample (arbitrary :: Gen Value)
+  quickCheck $ \(v :: Value) -> (decode . encode) v === Just v

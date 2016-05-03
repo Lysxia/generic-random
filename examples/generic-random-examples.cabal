@@ -3,9 +3,9 @@ version: 0
 build-type: Simple
 cabal-version: >=1.10
 
-executable aeson
+executable aeson-example
   main-is: aeson.hs
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-partial-type-signatures
   build-depends:
     aeson,
     base,
@@ -17,7 +17,7 @@ executable aeson
     generic-random
   default-language: Haskell2010
 
-executable functions
+executable functions-example
   main-is: functions.hs
   ghc-options: -Wall
   build-depends:
@@ -26,7 +26,7 @@ executable functions
     generic-random
   default-language: Haskell2010
 
-executable positive-ints
+executable positive-ints-example
   main-is: positive-ints.hs
   ghc-options: -Wall
   build-depends:
