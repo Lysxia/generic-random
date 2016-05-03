@@ -136,19 +136,22 @@ primOrder' = Succ Zero
 primlCoef :: Integer
 primlCoef = 1
 
--- | The type of the first argument of @Data.Data.gunfold@.
+-- | The type of the first argument of 'Data.Data.gunfold'.
 type GUnfold m = forall b r. Data b => m (b -> r) -> m r
+
+-- | Type of 'xedni''.
+type AMap m = HashMap Aliased (Ix, Alias m)
 
 collectTypesM :: Data a => proxy a
   -> State (DataDef m) (Either Aliased Ix, ((Nat, Integer), Maybe Int))
 collectTypesM a = chaseType a (const id)
 
 chaseType :: Data a => proxy a
-  -> ((Maybe (Alias m), Ix) -> DataDef m -> DataDef m)
+  -> ((Maybe (Alias m), Ix) -> AMap m -> AMap m)
   -> State (DataDef m) (Either Aliased Ix, ((Nat, Integer), Maybe Int))
 chaseType a k = do
   let t = typeRep a
-  DataDef{..} <- get
+  dd@DataDef{..} <- get
   let
     lookup i r =
       let
@@ -158,13 +161,16 @@ chaseType a k = do
   case HashMap.lookup t index of
     Nothing -> do
       let i = count
-      modify $ \dd -> k (Nothing, i) dd
+      put dd
         { count = i + 1
         , index = HashMap.insert t (Right i) index
         , xedni = HashMap.insert i (someData' a) xedni
+        , xedni' = k (Nothing, i) xedni'
         }
       traverseType a i -- Updates lTerm and degree
-    Just (Right i) -> lookup i (Right i)
+    Just (Right i) -> do
+      put dd { xedni' = k (Nothing, i) xedni' }
+      lookup i (Right i)
     Just (Left j) ->
       case xedni' #! j of
         (-1, Alias f) -> do
@@ -174,8 +180,7 @@ chaseType a k = do
                 Nothing -> Alias f
                 Just (Alias g) -> Alias (composeCastM f g)
             in
-            k (Just alias', i) . \dd -> dd
-              { xedni' = HashMap.insert j (i, alias') xedni' }
+            k (Just alias', i) . HashMap.insert j (i, alias')
           return (Left j, ld)
         (i, _) -> lookup i (Left j)
   where
