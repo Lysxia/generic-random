@@ -5,6 +5,7 @@ import Control.Applicative
 import Control.Monad.Trans.Class
 import Data.Bool
 import Data.Data
+import Data.Function
 import GHC.Generics
 import Control.DeepSeq
 import Criterion.Main
@@ -35,7 +36,7 @@ gen2 n = g
         (k (n+1) L)
         (gen' (n+1) $ \m l -> gen' m $ \m r -> k m (N l r))
 
-main = defaultMain $ liftA2 (flip ($))
+main = defaultMain $ liftA2 (&)
   [4 ^ e | e <- [1 .. 5]]
 
   -- Singular rejection sampling
@@ -56,13 +57,12 @@ main = defaultMain $ liftA2 (flip ($))
   , bg "PR" generatorPR'
 
   -- Pointed generator, not memoizing oracle
-  , bg' "point-recomp" generatorP'
+  , bg' "P-recomp" generatorP'
   ]
 
 bg, bg' :: String -> (Int -> Gen T) -> Int -> Benchmark
-bg name gen n = bench (name ++ " " ++ show n) . nfIO $
-  generateT (gen n)
-bg' name gen n = bench (name ++ " " ++ show n) . nfIO $
+bg name gen n = bench (name ++ "_" ++ show n) . nfIO . generateT $ gen n
+bg' name gen n = bench (name ++ "_" ++ show n) . nfIO $
   evaluate n >>= generateT . gen
 
 generateT :: Gen T -> IO T
