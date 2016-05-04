@@ -7,7 +7,7 @@ import Text.XML
 import Data.Random.Generics
 
 instance Arbitrary Document where
-  arbitrary = sized $ generatorWith [textAlias] . (4 *)
+  arbitrary = sized $ generatorSRWith [textAlias] . (4 *)
 
 textAlias :: AliasR Gen
 textAlias = aliasR $ \() -> fmap Text.pack (listOf (choose ('a', 'z')))

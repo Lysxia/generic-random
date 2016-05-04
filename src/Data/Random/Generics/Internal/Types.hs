@@ -91,6 +91,7 @@ someData' = SomeData . reproxy
 -- | Size as the number of constructors.
 type Size = Int
 
+-- | Internal transformer for rejection sampling.
 newtype RejectT m a = RejectT
   { unRejectT :: ReaderT Size (StateT Size (MaybeT m)) a
   } deriving

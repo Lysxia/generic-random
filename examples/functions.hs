@@ -20,7 +20,7 @@ instance Show F where
   show (F f) = "<" ++ show (f True) ++ "," ++ show (f False) ++ ">"
 
 gen :: Gen [F]
-gen = sized $ pointedGeneratorWith aliases
+gen = sized $ generatorPWith aliases
   where
     aliases = [alias $ \() -> fmap F arbitrary :: Gen F]
 

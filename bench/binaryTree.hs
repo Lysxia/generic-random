@@ -1,54 +1,69 @@
 {-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
 module Main where
 
-import Control.DeepSeq
-import Criterion.Main
+import Control.Applicative
+import Control.Monad.Trans.Class
+import Data.Bool
 import Data.Data
 import GHC.Generics
+import Control.DeepSeq
+import Criterion.Main
 import Test.QuickCheck
 import Control.Exception ( evaluate )
 import Data.Random.Generics
+import Data.Random.Generics.Internal
+import Data.Random.Generics.Internal.Types
 
 data T = N T T | L
   deriving (Eq, Ord, Show, Data, Generic)
 
 instance NFData T
 
-pointRejectT' size = generator_ [] 1 (Just size) (tolerance epsilon size)
+gen1 :: Int -> Gen T
+gen1 n = runRejectT (tolerance epsilon (n + 1)) gen'
+  where
+    gen' = incr >> lift arbitrary >>= bool (return L) (liftA2 N gen' gen')
 
-main = defaultMain $
-  [4 ^ e | e <- [1 .. 5]] >>= \n ->
-    -- Singular rejection sampling
-    [ bench ("reject " ++ show n) $
-        nfGen (generator n)
+gen2 :: Int -> Gen T
+gen2 n = g
+  where
+    (minSize, maxSize) = tolerance epsilon (n + 1)
+    g = gen' 0 (\m t -> if m < minSize then g else return t)
+    gen' n k | n >= maxSize = g
+    gen' n k =
+      arbitrary >>= bool
+        (k (n+1) L)
+        (gen' (n+1) $ \m l -> gen' m $ \m r -> k m (N l r))
 
-    -- Sized rejection sampling
-    , bench ("reject-simple " ++ show n) $
-        nfGen (simpleGenerator' n)
+main = defaultMain $ liftA2 (flip ($))
+  [4 ^ e | e <- [1 .. 5]]
+  $ take 3
+  -- Singular rejection sampling
+  [ bg "handwritten1" gen1
+  , bg "handwritten2" gen2
+  , bg "SR" generatorSR
 
-    -- Sized rejection sampling, not memoizing oracle
-    , bench ("reject-simple-recomp " ++ show n) $
-        nfIO (evaluate n >>= generateT . simpleGenerator')
+  -- Sized rejection sampling
+  , bg "R" generatorR'
 
-    -- Pointed generator (default)
-    , bench ("point " ++ show n) $
-        nfGen (pointedGenerator n)
+  -- Sized rejection sampling, not memoizing oracle
+  , bg' "R-recomp" generatorR'
 
-    -- Pointed generator with rejection sampling
-    , bench ("point-reject " ++ show n) $
-        nfGen (pointRejectT' n)
+  -- Pointed generator
+  , bg "P" generatorP'
 
-    -- Pointed generator, memoizing oracle
-    , bench ("point-norecomp " ++ show n) $
-        nfGen (pointedGenerator' n)
+  -- Pointed generator with rejection sampling
+  , bg "PR" generatorPR'
 
-    -- Pointed generator, not memoizing oracle
-    , bench ("point-recomp " ++ show n) $
-        nfIO (evaluate n >>= generateT . pointedGenerator')
-    ]
+  -- Pointed generator, not memoizing oracle
+  , bg' "point-recomp" generatorP'
+  ]
 
-nfGen :: Gen T -> Benchmarkable
-nfGen = nfIO . generateT
+bg, bg' :: String -> (Int -> Gen T) -> Int -> Benchmark
+bg name gen n = bench (name ++ " " ++ show n) . nfIO $
+  generateT (gen n)
+bg' name gen n = bench (name ++ " " ++ show n) . nfIO $
+  evaluate n >>= generateT . gen
 
 generateT :: Gen T -> IO T
 generateT = generate

@@ -57,6 +57,7 @@ benchmark bench-binarytree
     criterion,
     deepseq,
     QuickCheck,
+    transformers,
     generic-random
 
 source-repository head
