@@ -37,7 +37,7 @@ gen2 n = g
 
 main = defaultMain $ liftA2 (flip ($))
   [4 ^ e | e <- [1 .. 5]]
-  $ take 3
+
   -- Singular rejection sampling
   [ bg "handwritten1" gen1
   , bg "handwritten2" gen2

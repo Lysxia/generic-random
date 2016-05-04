@@ -14,7 +14,8 @@ import Data.Random.Generics.Internal.Types
 data SG r = SG
   { minSize :: Size
   , maxSizeM :: Maybe Size
-  , runSG :: Int -> Maybe Double -> r
+  , runSG :: Points -> Maybe Double -> r
+  , runSmallG :: Points -> r
   } deriving Functor
 
 type Points = Int
@@ -22,6 +23,7 @@ type Points = Int
 rangeSG :: SG r -> (Size, Maybe Size)
 rangeSG = minSize &&& maxSizeM
 
+-- | For documentation.
 applySG :: SG r -> Points -> Maybe Double -> r
 applySG SG{..} k sizeM
   | Just minSize == maxSizeM = runSG k (fmap fromIntegral maxSizeM)
@@ -38,7 +40,7 @@ applySG SG{..} k sizeM
 make :: (Data a, MonadRandomLike m)
   => [Alias m] -> proxy a -> SG (m a)
 make aliases a =
-  SG minSize maxSizeM make'
+  SG minSize maxSizeM make' makeSmall
   where
     dd = collectTypes aliases a
     t = typeRep a
@@ -52,6 +54,9 @@ make aliases a =
         dd' = dds !! k
         oracle = makeOracle dd' t sizeM
         generators = makeGenerators dd' oracle
+    makeSmall k = getSmallGenerator dd' (smallGenerators dd') a
+      where
+        dd' = dds !! k
     dds = iterate point dd
 
 makeR :: (Data a, MonadRandomLike m)
@@ -85,11 +90,12 @@ makeR aliases a = fmap (flip runRejectT) (make aliases a)
 type Size' = Int
 
 rescale :: SG r -> Size' -> Double
-rescale (SG minSize (Just maxSize) _) size' =
+rescale (SG minSize (Just maxSize) _ _) size' =
   fromIntegral minSize + fromIntegral (min 99 size' * (maxSize - minSize)) / 100
-rescale (SG minSize Nothing _) size' = fromIntegral (minSize + size')
+rescale (SG minSize Nothing _ _) size' = fromIntegral (minSize + size')
 
 apply :: SG r -> Points -> Maybe Size' -> r
+apply sg k (Just 0) = runSmallG sg k
 apply sg k size' = runSG sg k (fmap (rescale sg) size')
 
 applyR :: SG ((Size, Size) -> r) -> Points -> Maybe Size' -> (Size', Size') -> r
