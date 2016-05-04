@@ -338,6 +338,7 @@ makeOracle dd0 t size' =
   seq v
   HashMap.fromList (zip cs (S.toList v))
   where
+    -- We need the next pointing to capture the average size in an equation.
     dd@DataDef{..} = if isJust size' then point dd0 else dd0
     cs = flip C <$> [0 .. points] <*> [0 .. count - 1]
     m = count * (points + 1)

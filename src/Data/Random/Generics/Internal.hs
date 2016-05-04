@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Data.Random.Generics.Internal where
 
+import Control.Arrow ( (&&&) )
+import Control.Applicative
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -12,45 +14,58 @@ import Data.Random.Generics.Internal.Types
 -- | Size as the number of constructors.
 type Size = Int
 
+-- | Sized generator.
+data SG r = SG
+  { minSize :: Size
+  , maxSizeM :: Maybe Size
+  , runSG :: Int -> Maybe Double -> r
+  }
+
+rangeSG :: SG r -> (Size, Maybe Size)
+rangeSG = minSize &&& maxSizeM
+
 -- * Helper functions
 
 makeGenerator :: (Data a, Monad m)
-  => PrimRandom m -> [Alias m] -> proxy a
-  -> ((Size, Maybe Size), Int -> Maybe Double -> m a)
-makeGenerator primRandom aliases a = ((minSize, maxSize), makeGenerator')
+  => PrimRandom m -> [Alias m] -> proxy a -> SG (m a)
+makeGenerator primRandom aliases a =
+  SG minSize maxSizeM makeGenerator'
   where
     dd = collectTypes aliases a
-    -- We need the next pointing to capture the average size in an equation.
     t = typeRep a
     i = case index dd #! t of
       Left j -> fst (xedni' dd #! j)
       Right i -> i
     minSize = natToInt $ fst (lTerm dd #! i)
-    maxSize = HashMap.lookup i (degree dd)
-    makeGenerator' _ (Just size)
-      | size <= fromIntegral minSize = smallGenerator
-      | Just maxSize <- maxSize, size >= fromIntegral maxSize =
-        error "Target size too large."
-    makeGenerator' _ Nothing | Just _ <- maxSize =
-      error "Cannot make singular sampler: this type is finite."
-    makeGenerator' k size' = getGenerator dd' generators a k
+    maxSizeM = HashMap.lookup i (degree dd)
+    makeGenerator' k sizeM = getGenerator dd' generators a k
       where
         dd' = dds !! k
-        oracle = makeOracle dd' t size'
+        oracle = makeOracle dd' t sizeM
         generators = makeGenerators dd' oracle primRandom
-    smallGenerator = getSmallGenerator dd (smallGenerators dd primRandom) a
+    -- smallGenerator = getSmallGenerator dd (smallGenerators dd primRandom) a
     dds = iterate point dd
+
+applySG :: SG r -> Int -> Maybe Double -> r
+applySG SG{..} k sizeM
+  | Just minSize == maxSizeM = runSG k (fmap fromIntegral maxSizeM)
+  | Just size <- sizeM, size <= fromIntegral minSize =
+      error "Target size too small."
+  | Just True <- liftA2 ((<=) . fromIntegral) maxSizeM sizeM =
+      error "Target size too large."
+  | Nothing <- sizeM, Just _ <- maxSizeM =
+      error "Cannot make singular sampler for finite type."
+  | otherwise = runSG k sizeM
 
 type AliasR m = Alias (RejectT m)
 
-ceiledRejectionSampler
-  :: (Data a, Monad m)
+ceiledRejectionSampler :: (Data a, Monad m)
   => PrimRandom m -> [AliasR m] -> proxy a
-  -> ((Size, Maybe Size), Int -> Maybe Double -> (Size, Size) -> m a)
-ceiledRejectionSampler primRandom aliases a =
-  (range, (fmap . fmap) (flip runRejectT) makeGenerator')
+  -> SG ((Size, Size) -> m a)
+ceiledRejectionSampler primRandom aliases a = sg
+  { runSG = (fmap . fmap) (flip runRejectT) (runSG sg) }
   where
-    (range, makeGenerator') = makeGenerator primRandom' aliases a
+    sg = makeGenerator primRandom' aliases a
     primRandom' = ceilPrimRandom primRandom
 
 epsilon :: Double

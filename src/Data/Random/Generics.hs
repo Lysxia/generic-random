@@ -209,29 +209,31 @@ generatorWith aliases primRandom =
 
 pointedGeneratorWith
   :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
-pointedGeneratorWith aliases primRandom =
-  snd . fromMaybe (last generators)
-    . \size' -> find ((>= size') . fst) generators
+pointedGeneratorWith aliases primRandom = generators
   where
-    (range@(minSize, maxSize'), makeGenerator') =
-      makeGenerator primRandom aliases []
+    sg = makeGenerator primRandom aliases []
+    range = (minSize sg, maxSizeM sg)
     generators =
-      [ (size', makeGenerator' 1 (Just (rescale range size'))) | size' <- sizes' ]
-    sizes' = 0 : case maxSize' of
-      Nothing -> pow2s
-      Just maxSize | maxSize == minSize -> []
-      Just _ -> takeWhile (< 100) pow2s ++ [100]
-    pow2s = [ 2 ^ e | e <- [0 :: Int ..] ]
+      sparseSized
+        (runSG sg 1 . Just . rescale range)
+        (99 <$ maxSizeM sg)
+
+sparseSized :: (Int -> a) -> Maybe Int -> Int -> a
+sparseSized f maxSizeM =
+  maybe a0 snd . \size' -> find ((>= size') . fst) as
+  where
+    as = [ (s, f s) | s <- ss ]
+    ss = 0 : maybe id (takeWhile . (>)) maxSizeM [ 2 ^ e | e <- [ 0 :: Int ..] ]
+    a0 = f (fromJust maxSizeM)
 
 -- ** Fixed size
 
 pointedGeneratorWith'
   :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
 pointedGeneratorWith' aliases primRandom size' =
-  makeGenerator' 1 (Just (rescale range size'))
+  runSG sg 1 (Just (rescale (rangeSG sg) size'))
   where
-    (range, makeGenerator') =
-      makeGenerator primRandom aliases []
+    sg = makeGenerator primRandom aliases []
 
 simpleGeneratorWith'
   :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size' -> m a
@@ -249,9 +251,10 @@ generator_ :: (Data a, Monad m)
   -> (Size', Size') -> m a
 generator_ primRandom aliases = \k size' ->
   let size = fmap (rescale range) size' in
-  generator' k size . rescaleInterval
+  runSG sg k size . rescaleInterval
   where
-    (range, generator') = ceiledRejectionSampler primRandom aliases []
+    sg = ceiledRejectionSampler primRandom aliases []
+    range = rangeSG sg
     rescaleInterval (a', b') = (a, b)
       where
         a = floor (rescale range a')
