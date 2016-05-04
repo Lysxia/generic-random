@@ -9,7 +9,7 @@ import Test.QuickCheck
 import Data.Random.Generics
 
 instance Arbitrary Value where
-  arbitrary = sized $ pointedGeneratorWith aliases asGen
+  arbitrary = sized $ pointedGeneratorWith aliases
 
 aliases :: [Alias Gen]
 aliases =

@@ -393,32 +393,18 @@ phi dd@DataDef{..} _ tyInfo = f
 -- generator @m a@.
 type Generators m = (HashMap AC (SomeData m), HashMap C (SomeData m))
 
--- | Basic component of random generators.
---
--- This makes the implementation abstract over both 'MonadRandom' instances and
--- 'Test.QuickCheck.Gen'.
-data PrimRandom m = PrimRandom
-  { incr :: m () -- Called for every constructor
-  -- Generators in @[0, upperBound)@
-  , doubleR :: Double -> m Double
-  , integerR :: Integer -> m Integer
-  , int :: m Int
-  , double :: m Double
-  , char :: m Char
-  }
-
 -- | Build all involved generators at once.
 makeGenerators
-  :: forall m. Monad m
-  => DataDef m -> Oracle -> PrimRandom m -> Generators m
-makeGenerators DataDef{..} oracle pr@PrimRandom{..} =
+  :: forall m. MonadRandomLike m
+  => DataDef m -> Oracle -> Generators m
+makeGenerators DataDef{..} oracle =
   seq oracle
   (generatorsL, generatorsR)
   where
     f (C i _) tyInfo = case xedni #! i of
       SomeData a -> SomeData $ incr >>
         case tyInfo of
-          [] -> defGen pr
+          [] -> defGen
           _ -> frequencyWith doubleR (fmap g tyInfo) `proxyType` a
     g :: Data a => (Integer, Constr, [C']) -> (Double, m a)
     g (v, constr, js) =
@@ -439,12 +425,12 @@ type SmallGenerators m =
 
 -- | Generators of values of minimal sizes.
 smallGenerators
-  :: forall m. Monad m => DataDef m -> PrimRandom m -> SmallGenerators m
-smallGenerators DataDef{..} pr@PrimRandom{..} = (generatorsL, generatorsR)
+  :: forall m. MonadRandomLike m => DataDef m -> SmallGenerators m
+smallGenerators DataDef{..} = (generatorsL, generatorsR)
   where
     f i (SomeData a) = SomeData $ incr >>
       case types #! C i 0 of
-        [] -> defGen pr
+        [] -> defGen
         tyInfo ->
           let gs = (tyInfo >>= g (fst (lTerm #! i))) in
           frequencyWith integerR gs `proxyType` a
@@ -464,8 +450,8 @@ generate :: Applicative m => GUnfold (ReaderT [SomeData m] m)
 generate rest = ReaderT $ \(g : gs) ->
   rest `runReaderT` gs <*> unSomeData g
 
-defGen :: (Data a, Monad m) => PrimRandom m -> m a
-defGen PrimRandom{..} = gen
+defGen :: (Data a, MonadRandomLike m) => m a
+defGen = gen
   where
     gen =
       let dt = withProxy dataTypeOf gen in

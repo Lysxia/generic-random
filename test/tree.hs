@@ -1,17 +1,28 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 import Control.Monad
 import Data.Data
 import Data.Foldable
 import Data.List
 import Test.QuickCheck
 import Data.Random.Generics
-import Common
+
+data T = N T T | L
+  deriving (Eq, Ord, Show, Data)
+
+-- size
+s :: T -> Int
+s (N l r) = 1 + s l + s r
+s L = 0
+
+pointRejectT' :: Int -> Gen T
+pointRejectT' size = generator_ [] 1 (Just size) (tolerance epsilon size)
 
 main =
   for_ [ 4 ^ e | e <- [2 .. 4] ] $ \n ->
     for_
-      [ ("reject ", rejectT)
-      , ("rejectSimple ", rejectSimpleT')
-      , ("point ", pointT')
+      [ ("reject ", generator)
+      , ("rejectSimple ", simpleGenerator')
+      , ("point ", pointedGenerator')
       , ("pointReject ", pointRejectT')
       ] $ \(name, g) ->
       stats (name ++ show n) s (g n)

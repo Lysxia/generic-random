@@ -19,17 +19,15 @@ module Data.Random.Generics (
   pointedGeneratorWith',
   -- * Auxiliary definitions
   -- ** Dictionaries
-  asGen,
-  asMonadRandom,
-  PrimRandom,
+  MonadRandomLike (..),
+  AMonadRandom (..),
   -- ** Alias
   alias,
   aliasR,
-  alias',
-  Alias,
+  coerceAlias,
+  coerceAliases,
+  Alias (..),
   AliasR,
-  -- ** Internal
-  generator_
   ) where
 
 import Data.Data
@@ -42,46 +40,16 @@ import Data.Random.Generics.Internal
 import Data.Random.Generics.Internal.Oracle
 import Data.Random.Generics.Internal.Types
 
--- | The size of a value is its number of constructors.
---
--- Here, however, the 'Size'' type is interpreted differently to make better
--- use of QuickCheck's size parameter, provided by the 'Test.QuickCheck.sized'
--- combinator, so that we generate non-trivial data even at very small size
--- values.
---
--- For infinite types, with objects of unbounded sizes @> minSize@, given a
--- parameter @delta :: 'Size''@, the produced values have an average size close
--- to @minSize + delta@.
---
--- For example, values of type @Either () [Bool]@ have at least two constructors,
--- so
---
--- @
---   'generator' 'asGen' delta :: 'Gen' (Either () [Bool])
--- @
---
--- will target sizes close to @2 + delta@;
--- the offset becomes less noticeable as @delta@ grows to infinity.
---
--- For finite types with sizes in @[minSize, maxSize]@, the target
--- expected size is obtained from a 'Size'' in @[0, 99]@ by an affine mapping.
-type Size' = Int
-
-rescale :: (Int, Maybe Int) -> Size' -> Double
-rescale (minSize, Just maxSize) size' =
-  fromIntegral minSize + fromIntegral (min 99 size' * (maxSize - minSize)) / 100
-rescale (minSize, Nothing) size' = fromIntegral (minSize + size')
-
 -- * Main functions
 
 -- $sized
--- These functions and their @_With@ counterparts below can be partially
--- applied to a 'PrimRandom' dictionary: the numerical /oracles/ are computed
--- once and for all, so they can be reused for different sizes.
+-- When these functions and their @_With@ counterparts below are specialized,
+-- the numerical /oracles/ are computed once and for all, so they can be reused
+-- for different sizes.
 
 -- | @
---   'generator' 'asGen' :: Int -> 'Gen' a
---   'generator' 'asMonadRandom' :: 'MonadRandom' m => Int -> m a
+--   'generator' :: Int -> 'Gen' a
+--   'asMonadRandom' . 'generator' :: 'MonadRandom' m => Int -> m a
 -- @
 --
 -- Singular ceiled rejection sampler.
@@ -98,11 +66,11 @@ rescale (minSize, Nothing) size' = fromIntegral (minSize + size')
 --   instance 'Arbitrary' MyT where
 --     'arbitrary' = 'sized' ('generator' 'asGen')
 -- @
-generator :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
+generator :: (Data a, MonadRandomLike m) => Size' -> m a
 generator = generatorWith []
 
 -- | @
---   'pointedGenerator' 'asGen' :: Int -> 'Gen' a
+--   'pointedGenerator' :: Int -> 'Gen' a
 --   'pointedGenerator' 'asMonadRandom' :: 'MonadRandom' m => Int -> m a
 -- @
 --
@@ -138,7 +106,7 @@ generator = generatorWith []
 
 -- Oracles are computed only for sizes that are a power of two away from
 -- the minimum size of the datatype @minSize + 2 ^ e@.
-pointedGenerator :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
+pointedGenerator :: (Data a, MonadRandomLike m) => Size' -> m a
 pointedGenerator = pointedGeneratorWith []
 
 -- ** Fixed size
@@ -152,11 +120,11 @@ pointedGenerator = pointedGeneratorWith []
 -- functions with 'sized') has not been measured yet.
 
 -- | Generator of pointed values.
-pointedGenerator' :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
+pointedGenerator' :: (Data a, MonadRandomLike m) => Size' -> m a
 pointedGenerator' = pointedGeneratorWith' []
 
 -- | Ceiled rejection sampler with given average size.
-simpleGenerator' :: (Data a, Monad m) => PrimRandom m -> Size' -> m a
+simpleGenerator' :: (Data a, MonadRandomLike m) => Size' -> m a
 simpleGenerator' = simpleGeneratorWith' []
 
 -- * Generators with aliases
@@ -203,15 +171,15 @@ simpleGenerator' = simpleGeneratorWith' []
 -- @
 
 generatorWith
-  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size' -> m a
-generatorWith aliases primRandom =
-  generator_ primRandom aliases 0 Nothing . tolerance epsilon
+  :: (Data a, MonadRandomLike m) => [AliasR m] -> Size' -> m a
+generatorWith aliases =
+  generator_ aliases 0 Nothing . tolerance epsilon
 
 pointedGeneratorWith
-  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
-pointedGeneratorWith aliases primRandom = generators
+  :: (Data a, MonadRandomLike m) => [Alias m] -> Size' -> m a
+pointedGeneratorWith aliases = generators
   where
-    sg = makeGenerator primRandom aliases []
+    sg = makeGenerator aliases []
     range = (minSize sg, maxSizeM sg)
     generators =
       sparseSized
@@ -229,76 +197,13 @@ sparseSized f maxSizeM =
 -- ** Fixed size
 
 pointedGeneratorWith'
-  :: (Data a, Monad m) => [Alias m] -> PrimRandom m -> Size' -> m a
-pointedGeneratorWith' aliases primRandom size' =
+  :: (Data a, MonadRandomLike m) => [Alias m] -> Size' -> m a
+pointedGeneratorWith' aliases size' =
   runSG sg 1 (Just (rescale (rangeSG sg) size'))
   where
-    sg = makeGenerator primRandom aliases []
+    sg = makeGenerator aliases []
 
 simpleGeneratorWith'
-  :: (Data a, Monad m) => [AliasR m] -> PrimRandom m -> Size' -> m a
-simpleGeneratorWith' aliases primRandom size' =
-  generator_ primRandom aliases 0 (Just size') (tolerance epsilon size')
-
--- * Auxiliary definitions
-
--- | Boltzmann sampler, singular or with target average size, and rejecting
--- outside the tolerance interval.
---
--- Used to implement 'generator' and 'simpleGenerator''.
-generator_ :: (Data a, Monad m)
-  => PrimRandom m -> [AliasR m] -> Int -> Maybe Size'
-  -> (Size', Size') -> m a
-generator_ primRandom aliases = \k size' ->
-  let size = fmap (rescale range) size' in
-  runSG sg k size . rescaleInterval
-  where
-    sg = ceiledRejectionSampler primRandom aliases []
-    range = rangeSG sg
-    rescaleInterval (a', b') = (a, b)
-      where
-        a = floor (rescale range a')
-        b | Just maxSize <- snd range, b' == 100 = maxSize
-          | otherwise = ceiling (rescale range b')
-
--- ** Dictionaries
-
--- $primrandom
--- @'PrimRandom' m@ is a record of basic components to build our generators
--- with, allowing the implementation to remain abstract over both the
--- 'Test.QuickCheck.Gen' type and 'MonadRandom' instances. The concrete records
--- 'asGen' and 'asMonadRandom' provide their respective specializations.
-
--- | Dictionary for QuickCheck's 'Gen'.
-asGen :: PrimRandom Gen
-asGen = PrimRandom
-  (return ())
-  (\x -> choose (0, x))
-  (\x -> choose (0, x-1))
-  arbitrary
-  arbitrary
-  arbitrary
-
--- | Dictionary for 'MonadRandom' instances.
-asMonadRandom :: MonadRandom m => PrimRandom m
-asMonadRandom = PrimRandom
-  (return ())
-  (\x -> getRandomR (0, x))
-  (\x -> getRandomR (0, x-1))
-  getRandom
-  getRandom
-  getRandom
-
--- ** Aliases
-
--- | Main constructor for 'Alias'.
-alias :: (Monad m, Data a, Data b) => (a -> m b) -> Alias m
-alias = Alias . (=<<)
-
--- | Main constructor for 'AliasR'.
-aliasR :: (Monad m, Data a, Data b) => (a -> m b) -> AliasR m
-aliasR = Alias . (=<<) . fmap (lift . lift . lift)
-
--- | The true and more general form of 'Alias'.
-alias' :: (Data a, Data b) => (m a -> m b) -> Alias m
-alias' = Alias
+  :: (Data a, MonadRandomLike m) => [AliasR m] -> Size' -> m a
+simpleGeneratorWith' aliases size' =
+  generator_ aliases 0 (Just size') (tolerance epsilon size')
