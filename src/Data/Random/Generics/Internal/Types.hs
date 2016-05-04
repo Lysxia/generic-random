@@ -2,13 +2,11 @@
 {-# LANGUAGE TypeOperators, GeneralizedNewtypeDeriving #-}
 module Data.Random.Generics.Internal.Types where
 
-import Control.Applicative
 import Control.Monad.Random
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Trans.Maybe
+import Control.Monad.Trans
 import Data.Coerce
 import Data.Data
+import Data.Function
 import GHC.Stack ( CallStack, showCallStack )
 import Test.QuickCheck
 
@@ -92,23 +90,46 @@ someData' = SomeData . reproxy
 type Size = Int
 
 -- | Internal transformer for rejection sampling.
+--
+-- > ReaderT Size (StateT Size (MaybeT m)) a
 newtype RejectT m a = RejectT
-  { unRejectT :: ReaderT Size (StateT Size (MaybeT m)) a
-  } deriving
-  ( Functor, Applicative, Monad
-  , Alternative, MonadPlus, MonadReader Size, MonadState Size
-  )
+  { unRejectT :: forall r. Size -> Size -> m r -> (Size -> a -> m r) -> m r
+  }
+
+instance Functor (RejectT m) where
+  fmap f (RejectT go) = RejectT $ \maxSize size retry cont ->
+    go maxSize size retry $ \size a -> cont size (f a)
+
+instance Applicative (RejectT m) where
+  pure a = RejectT $ \_maxSize size _retry cont ->
+    cont size a
+  RejectT f <*> RejectT x = RejectT $ \maxSize size retry cont ->
+    f maxSize size retry $ \size f_ ->
+      x maxSize size retry $ \size x_ ->
+        cont size (f_ x_)
+
+instance Monad (RejectT m) where
+  RejectT x >>= f = RejectT $ \maxSize size retry cont ->
+    x maxSize size retry $ \size x_ ->
+      unRejectT (f x_) maxSize size retry cont
 
 instance MonadTrans RejectT where
-  lift = RejectT . lift . lift . lift
+  lift m = RejectT $ \_maxSize size _retry cont ->
+    m >>= cont size
 
 -- | Set lower bound
 runRejectT :: Monad m => (Size, Size) -> RejectT m a -> m a
-runRejectT (minSize, maxSize) (RejectT m) = fix $ \go -> do
-  x' <- runMaybeT (m `runReaderT` maxSize `runStateT` 0)
-  case x' of
-    Just (x, size) | size >= minSize -> return x
-    _ -> go
+runRejectT (minSize, maxSize) (RejectT m) = fix $ \go ->
+  m maxSize 0 go $ \size a ->
+    if size < minSize then
+      go
+    else
+      return a
+--runRejectT (minSize, maxSize) (RejectT m) = fix $ \go -> do
+--  x' <- runMaybeT (m `runReaderT` maxSize `runStateT` 0)
+--  case x' of
+--    Just (x, size) | size >= minSize -> return x
+--    _ -> go
 
 newtype AMonadRandom m a = AMonadRandom
   { asMonadRandom :: m a
@@ -153,11 +174,11 @@ instance MonadRandomLike Gen where
   char = arbitrary
 
 instance MonadRandomLike m => MonadRandomLike (RejectT m) where
-  incr = do
-    maxSize <- ask
-    size <- get
-    guard (size < maxSize)
-    put (size + 1)
+  incr = RejectT $ \maxSize size retry cont ->
+    if size >= maxSize then
+      retry
+    else
+      cont (size + 1) ()
   doubleR = lift . doubleR
   integerR = lift . integerR
   int = lift int
