@@ -151,7 +151,7 @@ class Monad m => MonadRandomLike m where
   incr :: m ()
   incr = return ()
 
-  -- | @doubleR@: generates values in @[0, upperBound)@.
+  -- | @doubleR upperBound@: generates values in @[0, upperBound]@.
   doubleR :: Double -> m Double
 
   -- | @integerR upperBound@: generates values in @[0, upperBound-1]@.

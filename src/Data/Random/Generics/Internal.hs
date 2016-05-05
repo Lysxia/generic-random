@@ -18,6 +18,7 @@ data SG r = SG
   , runSmallG :: Points -> r
   } deriving Functor
 
+-- | Number of pointing iterations.
 type Points = Int
 
 rangeSG :: SG r -> (Size, Maybe Size)
@@ -67,7 +68,7 @@ makeR aliases a = fmap (flip runRejectT) (make aliases a)
 -- | The size of a value is its number of constructors.
 --
 -- Here, however, the 'Size'' type is interpreted differently to make better
--- use of QuickCheck's size parameter, provided by the 'Test.QuickCheck.sized'
+-- use of QuickCheck's size parameter provided by the 'Test.QuickCheck.sized'
 -- combinator, so that we generate non-trivial data even at very small size
 -- values.
 --
@@ -85,8 +86,9 @@ makeR aliases a = fmap (flip runRejectT) (make aliases a)
 -- will target sizes close to @2 + delta@;
 -- the offset becomes less noticeable as @delta@ grows to infinity.
 --
--- For finite types with sizes in @[minSize, maxSize]@, the target
--- expected size is obtained from a 'Size'' in @[0, 99]@ by an affine mapping.
+-- For finite types with sizes in @[minSize, maxSize]@, the target expected
+-- size is obtained by clamping a 'Size'' to @[0, 99]@ and applying an affine
+-- mapping.
 type Size' = Int
 
 rescale :: SG r -> Size' -> Double

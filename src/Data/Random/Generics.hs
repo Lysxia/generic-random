@@ -1,4 +1,27 @@
 -- | Generic Boltzmann samplers.
+--
+-- Here, the words "/sampler/" and "/generator/" are used interchangeably.
+--
+-- Given an algebraic datatype:
+--
+-- > data A = A1 B C | A2 D
+--
+-- a Boltzmann sampler is recursively defined by choosing a constructor with
+-- some fixed distribution, and /independently/ generating values for the
+-- corresponding fields with the same method.
+--
+-- A key component is the aforementioned distribution, defined for every type
+-- such that the resulting generator produces a finite value in the end. These
+-- distributions are obtained from a precomputed object called /oracle/, which
+-- we will not describe further here.
+--
+-- Oracles depend on the target size of the generated data (except for singular
+-- samplers), and can be fairly expensive to compute repeatedly, hence some of
+-- the functions below attempt to avoid (re)computing too many of them even
+-- when the required size changes.
+--
+-- When these functions are specialized, oracles are memoized and will be
+-- reused for different sizes.
 
 module Data.Random.Generics (
   Size',
@@ -52,9 +75,6 @@ import Data.Random.Generics.Internal.Types
 -- * Main functions
 
 -- $sized
--- When these functions and their @_With@ counterparts below are specialized,
--- the numerical /oracles/ are computed once and for all, so they can be reused
--- for different sizes.
 --
 -- === Suffixes
 --
@@ -81,7 +101,7 @@ import Data.Random.Generics.Internal.Types
 --
 --     These generators filter out values whose sizes are not within some
 --     interval. In the first two sections, that interval is implicit:
---     @[(1-'epsilon')*size, (1+'epsilon')*size]@, for @'epsilon' = 0.1@.
+--     @[(1-'epsilon')*size', (1+'epsilon')*size']@, for @'epsilon' = 0.1@.
 --
 --     The generator restarts as soon as it has produced more constructors than
 --     the upper bound, this strategy is called /ceiled rejection sampling/.
