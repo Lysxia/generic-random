@@ -243,11 +243,14 @@ traverseType' _ _ =
 
 -- | If @(u, a)@ represents a power series of leading term @a * x ^ u@, and
 -- similarly for @(u', a')@, this finds the leading term of their sum.
+--
+-- The comparison of 'Nat' is unrolled here for maximum laziness.
 lPlus :: (Nat, Integer) -> (Nat, Integer) -> (Nat, Integer)
-lPlus ol@(order, lCoef) ol'@(order', lCoef')
-  | order < order' = ol
-  | order > order' = ol'
-  | otherwise = (order, lCoef + lCoef')
+lPlus (Zero, lCoef) (Zero, lCoef') = (Zero, lCoef + lCoef')
+lPlus (Zero, lCoef) _ = (Zero, lCoef)
+lPlus _ (Zero, lCoef') = (Zero, lCoef')
+lPlus (Succ order, lCoef) (Succ order', lCoef') =
+  first Succ $ lPlus (order, lCoef) (order', lCoef')
 
 -- | Sum of a list of series.
 lSum :: [(Nat, Integer)] -> (Nat, Integer)
