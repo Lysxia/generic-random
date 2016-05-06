@@ -13,7 +13,11 @@ Define sized random generators for almost any type.
       deriving (Show, Data)
 
     instance Arbitrary Term where
-      arbitrary = sized (generator asGen)
+      arbitrary = sized $ generatorPWith [positiveInts]
+
+    positiveInts :: Alias Gen
+    positiveInts =
+      alias $ \() -> fmap getPositive arbitrary :: Gen Int
 
     main = sample (arbitrary :: Gen Term)
 ```

@@ -26,6 +26,15 @@ executable functions-example
     generic-random
   default-language: Haskell2010
 
+executable lambda-example
+  main-is: lambda.hs
+  ghc-options: -Wall
+  build-depends:
+    base,
+    QuickCheck,
+    generic-random
+  default-language: Haskell2010
+
 executable positive-ints-example
   main-is: positive-ints.hs
   ghc-options: -Wall
