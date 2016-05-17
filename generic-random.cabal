@@ -1,7 +1,7 @@
 name:                generic-random
 version:             0.1.0.0
 synopsis:            Generic random generators
-description:         Please see README.md
+description:         Please see the README below.
 homepage:            http://github.com/lysxia/generic-random
 license:             MIT
 license-file:        LICENSE
@@ -62,4 +62,4 @@ benchmark bench-binarytree
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/generic-random
+  location: https://github.com/lysxia/generic-random
