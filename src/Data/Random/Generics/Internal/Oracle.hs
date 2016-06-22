@@ -18,7 +18,6 @@ import Data.Monoid
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import GHC.Generics ( Generic )
-import GHC.Stack ( CallStack, showCallStack )
 import Numeric.AD
 import Data.Random.Generics.Internal.Types
 import Data.Random.Generics.Internal.Solver
@@ -363,6 +362,7 @@ makeOracle dd0 t size' =
     -- Equations defining C_i(x) for all types with indices i
     phis :: Num a => V.Vector (a -> V.Vector a -> a)
     phis = V.fromList [ phi dd c (types #! c) | c <- listCs dd ]
+    eval' :: Double -> Maybe (S.Vector Double)
     eval' x = fixedPoint defSolveArgs phi' (S.replicate m 0)
       where
         phi' :: (Mode a, Scalar a ~ Double) => V.Vector a -> V.Vector a
@@ -510,11 +510,9 @@ frequencyWith randomR as = randomR total >>= select as
     select _ _ = (snd . head) as
     -- That should not happen in theory, but floating point might be funny.
 
-(#!) :: (?loc :: CallStack, Eq k, Hashable k)
+(#!) :: (Eq k, Hashable k)
   => HashMap k v -> k -> v
-h #! k = HashMap.lookupDefault (e ?loc) k h
-  where
-    e loc = error ("HashMap.(!): key not found\n" ++ showCallStack loc)
+(#!) = (HashMap.!)
 
 -- | @partitions k n@: lists of non-negative integers of length @n@ with sum
 -- less than or equal to @k@.

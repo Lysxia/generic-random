@@ -12,7 +12,7 @@ import Test.QuickCheck
 newtype F = F (Bool -> Bool)
 
 instance Data F where
-  gunfold = undefined
+  gunfold _ _ = undefined
   toConstr = undefined
   dataTypeOf = undefined
 
