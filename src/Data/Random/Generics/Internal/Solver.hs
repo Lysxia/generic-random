@@ -41,9 +41,10 @@ findZero SolveArgs{..} f = newton numIterations
 fixedPoint
   :: SolveArgs
   -> (forall a. (Mode a, Scalar a ~ R) => V.Vector a -> V.Vector a)
-  -> Vector R
-  -> Maybe (Vector R)
-fixedPoint args f = findZero args (liftA2 (V.zipWith (-)) f id)
+  -> V.Vector R
+  -> Maybe (V.Vector R)
+fixedPoint args f =
+  fmap S.convert . findZero args (liftA2 (V.zipWith (-)) f id) . S.convert
 
 -- | Assuming @p . f@ is satisfied only for positive values in some interval
 -- @(0, r]@, find @f r@.

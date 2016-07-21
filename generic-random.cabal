@@ -19,6 +19,7 @@ library
   exposed-modules:
     Data.Random.Generics
     Data.Random.Generics.Internal
+    Data.Random.Generics.Internal.Boltzmann
     Data.Random.Generics.Internal.Oracle
     Data.Random.Generics.Internal.Solver
     Data.Random.Generics.Internal.Types
@@ -27,6 +28,7 @@ library
     containers,
     hashable,
     unordered-containers,
+    split,
     ieee754,
     ad,
     hmatrix,

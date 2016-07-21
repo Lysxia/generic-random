@@ -16,7 +16,6 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Maybe ( fromJust, isJust )
 import Data.Monoid
 import qualified Data.Vector as V
-import qualified Data.Vector.Storable as S
 import GHC.Generics ( Generic )
 import Numeric.AD
 import Data.Random.Generics.Internal.Types
@@ -338,7 +337,7 @@ type Oracle = HashMap C Double
 makeOracle :: DataDef m -> TypeRep -> Maybe Double -> Oracle
 makeOracle dd0 t size' =
   seq v
-  HashMap.fromList (zip cs (S.toList v))
+  HashMap.fromList (zip cs (V.toList v))
   where
     -- We need the next pointing to capture the average size in an equation.
     dd@DataDef{..} = if isJust size' then point dd0 else dd0
@@ -348,13 +347,13 @@ makeOracle dd0 t size' =
     i = case index #! t of
       Left j -> fst (xedni' #! j)
       Right i -> i
-    checkSize _ (Just ys) | S.any (< 0) ys = False
+    checkSize _ (Just ys) | V.any (< 0) ys = False
     -- There may be solutions outside of the radius
     -- of convergence, but with negative components.
     checkSize (Just size) (Just ys) =
       size >= size_
       where
-        size_ = ys S.! j' / ys S.! j
+        size_ = ys V.! j' / ys V.! j
         j = dd ? C i k
         j' = dd ? C i (k + 1)
     checkSize Nothing (Just _) = True
@@ -362,8 +361,8 @@ makeOracle dd0 t size' =
     -- Equations defining C_i(x) for all types with indices i
     phis :: Num a => V.Vector (a -> V.Vector a -> a)
     phis = V.fromList [ phi dd c (types #! c) | c <- listCs dd ]
-    eval' :: Double -> Maybe (S.Vector Double)
-    eval' x = fixedPoint defSolveArgs phi' (S.replicate m 0)
+    eval' :: Double -> Maybe (V.Vector Double)
+    eval' x = fixedPoint defSolveArgs phi' (V.replicate m 0)
       where
         phi' :: (Mode a, Scalar a ~ Double) => V.Vector a -> V.Vector a
         phi' y = fmap (\f -> f (auto x) y) phis
