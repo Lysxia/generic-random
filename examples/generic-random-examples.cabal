@@ -55,3 +55,13 @@ executable xml-example
     xml-conduit,
     generic-random
   default-language: Haskell2010
+
+executable tree-example
+  main-is: tree.hs
+  ghc-options: -Wall
+  build-depends:
+    base,
+    QuickCheck,
+    vector,
+    generic-random
+  default-language: Haskell2010
