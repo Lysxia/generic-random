@@ -7,7 +7,7 @@ Define sized random generators for almost any type.
     {-# LANGUAGE DeriveDataTypeable #-}
     import Data.Data
     import Test.QuickCheck
-    import Data.Random.Generics
+    import Generic.Random.Data
 
     data Term = Lambda Int Term | App Term Term | Var Int
       deriving (Show, Data)

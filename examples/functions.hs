@@ -4,9 +4,9 @@
 --
 -- We generate a list of @Arbitrary@ functions.
 
-import Data.Random.Generics
 import Data.Data
 import Test.QuickCheck
+import Generic.Random.Data
 
 -- | A wrapper for a dummy @Data@ instance.
 newtype F = F (Bool -> Bool)

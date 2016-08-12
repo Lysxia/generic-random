@@ -1,8 +1,8 @@
--- | Applicative framework to define recursive structures and derive Boltzmann
+-- | Applicative interface to define recursive structures and derive Boltzmann
 -- samplers.
 --
 -- Given the recursive structure of the types, and how to combine generators,
--- the framework takes care of computing the oracles and setting the right
+-- the library takes care of computing the oracles and setting the right
 -- distributions.
 
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, RankNTypes, ScopedTypeVariables #-}
@@ -10,7 +10,7 @@
 {-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
 {-# LANGUAGE TypeApplications #-}
-module Data.Random.Generics.Internal.Boltzmann where
+module Generic.Random.Boltzmann where
 
 import Control.Applicative
 import Control.Monad
@@ -23,8 +23,9 @@ import Data.List.Split
 import Data.Vector ( Vector )
 import qualified Data.Vector as V
 import qualified Numeric.AD as AD
-import Data.Random.Generics.Internal.Solver
-import Data.Random.Generics.Internal.Types
+import Generic.Random.Internal.Common
+import Generic.Random.Internal.Solver
+import Generic.Random.Internal.Types
 
 class Embed f m where
   emap :: (m a -> m b) -> f a -> f b
@@ -161,24 +162,3 @@ point k s = System ((k + 1) * dim s) $ \x ->
   where
     flatten = join . fmap (V.fromList . take (k + 1) . unPointiful)
     resize = V.fromList . fmap Pointiful . chunksOf (k + 1) . V.toList
-
-frequencyWith
-  :: (Ord r, Num r, Monad m) => (r -> m r) -> [(r, m a)] -> m a
-frequencyWith _ [(_, a)] = a
-frequencyWith randomR as = randomR total >>= select as
-  where
-    total = (sum . fmap fst) as
-    select ((w, a) : as) x
-      | x < w = a
-      | otherwise = select as (x - w)
-    select _ _ = (snd . head) as
-    -- That should not happen in theory, but floating point might be funny.
-
--- | Binomial coefficient.
---
--- > binomial n k == factorial n `div` (factorial k * factorial (n-k))
-binomial :: Int -> Int -> Integer
-binomial = \n k -> pascal !! n !! k
-  where
-    pascal = [1] : fmap nextRow pascal
-    nextRow r = zipWith (+) (0 : r) (r ++ [0])

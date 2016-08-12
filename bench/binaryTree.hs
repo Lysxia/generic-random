@@ -14,9 +14,9 @@ import Test.QuickCheck
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Random
 import Control.Exception ( evaluate )
-import Data.Random.Generics
-import Data.Random.Generics.Internal
-import Data.Random.Generics.Internal.Types
+import Generic.Random.Data
+import Generic.Random.Internal.Data
+import Generic.Random.Internal.Types
 
 data T = N T T | L
   deriving (Eq, Ord, Show, Data, Generic)

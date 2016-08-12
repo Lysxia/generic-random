@@ -23,7 +23,7 @@
 -- When these functions are specialized, oracles are memoized and will be
 -- reused for different sizes.
 
-module Data.Random.Generics (
+module Generic.Random.Data (
   Size',
   -- * Main functions
   -- $sized
@@ -69,8 +69,8 @@ module Data.Random.Generics (
   ) where
 
 import Data.Data
-import Data.Random.Generics.Internal
-import Data.Random.Generics.Internal.Types
+import Generic.Random.Internal.Data
+import Generic.Random.Internal.Types
 
 -- * Main functions
 
@@ -215,13 +215,24 @@ generator' = generatorWith' []
 -- @
 --
 -- Another use case is to plug in user-defined generators where the default is
--- not satisfactory, for example, to get positive @Int@s:
+-- not satisfactory, for example, to generate positive @Int@s:
 --
 -- @
 --   let
 --     as = ['alias' $ \\() -> 'choose' (0, 100) :: 'Gen' Int)]
 --   in
 --     'generatorPWith' as 'asGen' :: 'Size' -> 'Gen' [Int]
+-- @
+--
+-- or to modify the weights assigned to some types. In particular, in some
+-- cases it seems preferable to make @String@ (and @Text@) have the same weight
+-- as @Int@ and @()@.
+--
+-- @
+--   let
+--     as = ['alias' $ \\() -> arbitrary :: 'Gen' String]
+--   in
+--     'generatorPWith' as 'asGen' :: 'Size' -> 'Gen' (Either Int String)
 -- @
 
 generatorSRWith

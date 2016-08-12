@@ -2,7 +2,7 @@
 
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes, FlexibleContexts, TypeFamilies #-}
-module Data.Random.Generics.Internal.Solver where
+module Generic.Random.Internal.Solver where
 
 import Control.Applicative
 import Data.AEq ( (~==) )

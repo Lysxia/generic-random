@@ -12,17 +12,18 @@ category:            Generics, Testing
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
-tested-with:         GHC == 7.10.3
+tested-with:         GHC == 8.0.1
 
 library
   hs-source-dirs:      src
   exposed-modules:
-    Data.Random.Generics
-    Data.Random.Generics.Internal
-    Data.Random.Generics.Internal.Boltzmann
-    Data.Random.Generics.Internal.Oracle
-    Data.Random.Generics.Internal.Solver
-    Data.Random.Generics.Internal.Types
+    Generic.Random.Boltzmann
+    Generic.Random.Data
+    Generic.Random.Internal.Common
+    Generic.Random.Internal.Data
+    Generic.Random.Internal.Oracle
+    Generic.Random.Internal.Solver
+    Generic.Random.Internal.Types
   build-depends:
     base >= 4.8 && < 5,
     containers,

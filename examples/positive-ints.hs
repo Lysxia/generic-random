@@ -4,8 +4,8 @@
 -- The alias wraps a user-defined generator for @Int@ values.
 
 {-# LANGUAGE ScopedTypeVariables #-}
-import Data.Random.Generics
 import Control.Monad.Random
+import Generic.Random.Data
 
 gen :: IO [Int]
 gen = asMonadRandom $ generatorPWith aliases 20

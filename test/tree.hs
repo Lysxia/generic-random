@@ -4,7 +4,7 @@ import Data.Data
 import Data.Foldable
 import Data.List
 import Test.QuickCheck
-import Data.Random.Generics
+import Generic.Random.Data
 
 data T = N T T | L
   deriving (Eq, Ord, Show, Data)

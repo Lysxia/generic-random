@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 import Test.QuickCheck
 import Data.Data
-import Data.Random.Generics
+import Generic.Random.Data
 
 data Term = Lambda Int Term | App Term Term | Var Int
   deriving (Show, Data)

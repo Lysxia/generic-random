@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, GADTs, ScopedTypeVariables, ImplicitParams #-}
 {-# LANGUAGE TypeOperators, GeneralizedNewtypeDeriving #-}
-module Data.Random.Generics.Internal.Types where
+module Generic.Random.Internal.Types where
 
 import Control.Monad.Random
 import Control.Monad.Trans

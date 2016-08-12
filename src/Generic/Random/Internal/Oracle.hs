@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, GADTs, RankNTypes, ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric, ImplicitParams #-}
 {-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
-module Data.Random.Generics.Internal.Oracle where
+module Generic.Random.Internal.Oracle where
 
 import Control.Applicative
 import Control.Monad
@@ -18,8 +18,9 @@ import Data.Monoid
 import qualified Data.Vector as V
 import GHC.Generics ( Generic )
 import Numeric.AD
-import Data.Random.Generics.Internal.Types
-import Data.Random.Generics.Internal.Solver
+import Generic.Random.Internal.Common
+import Generic.Random.Internal.Solver
+import Generic.Random.Internal.Types
 
 -- | We build a dictionary which reifies type information in order to
 -- create a Boltzmann generator.
@@ -481,58 +482,18 @@ ix (C i _) = i
 dd ?! j = C i k
   where (k, i) = j `divMod` count dd
 
-getGenerator :: (Functor m, Data a)
-  => DataDef m -> Generators m -> proxy a -> Int -> m a
+getGenerator :: Data a => DataDef m -> Generators m -> proxy a -> Int -> m a
 getGenerator dd (l, r) a k = unSomeData $
   case index dd #! typeRep a of
     Right i -> (r #! C i k)
     Left j -> (l #! AC j k)
 
-getSmallGenerator :: (Functor m, Data a)
-  => DataDef m -> SmallGenerators m -> proxy a -> m a
+getSmallGenerator :: Data a => DataDef m -> SmallGenerators m -> proxy a -> m a
 getSmallGenerator dd (l, r) a = unSomeData $
   case index dd #! typeRep a of
     Right i -> (r #! i)
     Left j -> (l #! j)
 
--- * General helper functions
-
-frequencyWith
-  :: (Show r, Ord r, Num r, Monad m) => (r -> m r) -> [(r, m a)] -> m a
-frequencyWith _ [(_, a)] = a
-frequencyWith randomR as = randomR total >>= select as
-  where
-    total = (sum . fmap fst) as
-    select ((w, a) : as) x
-      | x < w = a
-      | otherwise = select as (x - w)
-    select _ _ = (snd . head) as
-    -- That should not happen in theory, but floating point might be funny.
-
 (#!) :: (Eq k, Hashable k)
   => HashMap k v -> k -> v
 (#!) = (HashMap.!)
-
--- | @partitions k n@: lists of non-negative integers of length @n@ with sum
--- less than or equal to @k@.
-partitions :: Int -> Int -> [[Int]]
-partitions _ 0 = [[]]
-partitions k n = do
-  p <- [0 .. k]
-  (p :) <$> partitions (k - p) (n - 1)
-
--- | Multinomial coefficient.
---
--- > multinomial n ps == factorial n `div` product [factorial p | p <- ps]
-multinomial :: Int -> [Int] -> Integer
-multinomial _ [] = 1
-multinomial n (p : ps) = binomial n p * multinomial (n - p) ps
-
--- | Binomial coefficient.
---
--- > binomial n k == factorial n `div` (factorial k * factorial (n-k))
-binomial :: Int -> Int -> Integer
-binomial = \n k -> pascal !! n !! k
-  where
-    pascal = [1] : fmap nextRow pascal
-    nextRow r = zipWith (+) (0 : r) (r ++ [0])

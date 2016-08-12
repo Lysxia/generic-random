@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, DeriveFunctor #-}
-module Data.Random.Generics.Internal where
+module Generic.Random.Internal.Data where
 
 import Control.Arrow ( (&&&) )
 import Control.Applicative
@@ -7,8 +7,8 @@ import Data.Data
 import Data.Foldable
 import Data.Maybe
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Random.Generics.Internal.Oracle
-import Data.Random.Generics.Internal.Types
+import Generic.Random.Internal.Oracle
+import Generic.Random.Internal.Types
 
 -- | Sized generator.
 data SG r = SG

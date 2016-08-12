@@ -6,7 +6,7 @@ import qualified Data.Vector as Vector
 import Data.Text ( Text )
 import qualified Data.Text as Text
 import Test.QuickCheck
-import Data.Random.Generics
+import Generic.Random.Data
 
 instance Arbitrary Value where
   arbitrary = sized $ generatorPWith aliases
