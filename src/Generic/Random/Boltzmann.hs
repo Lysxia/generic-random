@@ -161,7 +161,11 @@ sfix
   :: MonadRandomLike m
   => System (Weighted m) b c -> Double -> Vector Double -> (Vector (m b), c)
 sfix s x oracle =
-  fix $ (first . fmap) (snd . runWeighted) . sys' s (scalar x) . V.zipWith weighted oracle . fst
+  fix $
+    (first . fmap) (snd . runWeighted) .
+    sys' s (scalar x) .
+    V.zipWith weighted oracle .
+    fst
 
 data Pointiful f a = Pointiful [f a] | Zero (f a)
 
