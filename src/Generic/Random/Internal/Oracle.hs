@@ -367,7 +367,7 @@ makeOracle dd0 t size' =
       where
         phi' :: (Mode a, Scalar a ~ Double) => V.Vector a -> V.Vector a
         phi' y = fmap (\f -> f (auto x) y) phis
-    v = fromJust (search eval' (checkSize size'))
+    v = (fromJust . snd) (search eval' (checkSize size'))
 
 -- | Generating function definition. This defines a @Phi_i[k]@ function
 -- associated with the @k@-th pointing of the type at index @i@, such that:

@@ -48,7 +48,7 @@ fixedPoint args f =
 
 -- | Assuming @p . f@ is satisfied only for positive values in some interval
 -- @(0, r]@, find @f r@.
-search :: (Double -> a) -> (a -> Bool) -> a
+search :: (Double -> a) -> (a -> Bool) -> (Double, a)
 search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
   where
     search' y (x : xs@(x' : _))
@@ -57,7 +57,7 @@ search f p = search' e0 (0 : [2 ^ n | n <- [0 .. 100 :: Int]])
       where y' = f x'
     search' _ _ = error "Solution not found. Uncontradictable predicate?"
     search'' y x x'
-      | x ~== x' = y
+      | x ~== x' = (x, y)
       | p y_ = search'' y_ x_ x'
       | otherwise = search'' y x x_
       where
