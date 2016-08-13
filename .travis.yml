@@ -14,10 +14,6 @@ before_cache:
 
 matrix:
   include:
-    - env: CABALVER=1.24 GHCVER=7.10.3
-      compiler: ": #GHC 7.10.3"
-      addons: {apt: {packages: [cabal-install-1.24,ghc-7.10.3,libgsl0-dev,liblapack-dev,libatlas-base-dev], sources: [hvr-ghc]}}
-
     - env: CABALVER=1.24 GHCVER=8.0.1
       compiler: ": #GHC 8.0.1"
       addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1,libgsl0-dev,liblapack-dev,libatlas-base-dev], sources: [hvr-ghc]}}
