@@ -212,4 +212,5 @@ point k s = System ((k + 1) * dim s) $ \x ->
   first flatten . sys' s (Pointiful (repeat x)) . resize
   where
     flatten = join . fmap (V.fromList . take (k + 1) . unPointiful)
-    resize = V.fromList . fmap Pointiful . chunksOf (k + 1) . V.toList
+    resize v = V.generate (dim s) $ \i ->
+      Pointiful [v V.! j | j <- [i * (k + 1) .. i * (k + 1) + k]]
