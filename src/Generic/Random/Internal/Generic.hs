@@ -176,7 +176,7 @@ instance (GASum (Sized n) f, GASum (Sized n) g, BaseCases n f, BaseCases n g)
       frequency' :: [Gen' sized a] -> Tagged n [[a]] -> Freq sized a
       frequency' as (Tagged a0s) = Freq $ \ws ->
         let
-          units = [(w, elements a0) | (w, a0) <- zip ws a0s]
+          units = [(w, elements a0) | (w, a0@(_ : _)) <- zip ws a0s]
         in
           sized $ \sz -> frequency $
             if sz == 0 && not (null units) then
