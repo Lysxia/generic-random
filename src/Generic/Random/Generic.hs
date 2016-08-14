@@ -22,6 +22,7 @@ module Generic.Random.Generic
   , genericArbitraryFrequency
   , genericArbitraryFrequency'
   , genericArbitrary'
+  , Nat (..)
   ) where
 
 import Generic.Random.Internal.Generic
