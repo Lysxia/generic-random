@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE AllowAmbiguousTypes, ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds, KindSignatures #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Generic.Random.Internal.Generic where
 
 import Control.Applicative
@@ -56,9 +57,10 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- whenever it can find any of the given type.
 --
 -- The type of 'genericArbitraryFrequency'' has an ambiguous @n@ parameter; it
--- is a type-level natural number of type 'Nat' and it can be specified using
--- the @TypeApplications@ extension. That number determines the maximum /depth/
--- of terms that can be used to end recursion.
+-- is a type-level natural number of type 'Nat'. That number determines the
+-- maximum /depth/ of terms that can be used to end recursion.
+--
+-- You'll need the @TypeApplications@ and @DataKinds@ extensions.
 --
 -- > genericArbitraryFrequency' @n weights
 --
@@ -107,9 +109,9 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- available, such as in @Tree@, we can pass a larger depth @n@. The effectiveness
 -- of this parameter depends on the concrete type the generator is used for.
 --
--- For instance, if we want to generate a value of @Tree ()@, there is a term
--- of depth 1 (represented by @''S' ''Z'@) that we can use to end recursion:
--- @Leaf ()@.
+-- For instance, if we want to generate a value of type @Tree ()@, there is a
+-- value of depth 1 (represented by @''S' ''Z'@) that we can use to end
+-- recursion: @Leaf ()@.
 --
 -- > genericArbitraryFrequency' @('S 'Z) :: [Int] -> Gen (Tree ())
 -- > genericArbitraryFrequency' @('S 'Z) [x, y] =
@@ -121,6 +123,21 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- >         [ (x, Leaf <$> arbitrary)
 -- >         , (y, scale (`div` 2) $ Node <$> arbitrary <*> arbitrary)
 -- >         ]
+--
+-- Because the argument of @Tree@ must be inspected in order to discover
+-- values of type @Tree ()@, we incur some extra constraints if we want
+-- polymorphism.
+--
+-- @FlexibleContexts@ and @UndecidableInstances@ are also required.
+--
+-- > instance (Arbitrary a, Generic a, BaseCases 'Z (Rep a))
+-- >   => Arbitrary (Tree a) where
+-- >   arbitrary = genericArbitraryFrequency' @('S 'Z) [1, 2]
+--
+-- A synonym is provided for brevity.
+--
+-- > instance (Arbitrary a, BaseCases' 'Z a) => Arbitrary (Tree a) where
+-- >   arbitrary = genericArbitraryFrequency' @('S 'Z) [1, 2]
 
 genericArbitraryFrequency'
   :: forall (n :: Nat) a
@@ -231,10 +248,16 @@ instance (GAProduct f, GAProduct g) => GAProduct (f :*: g) where
 
 newtype Tagged (a :: Nat) b = Tagged { unTagged :: b }
 
+-- | Peano-encoded natural numbers.
 data Nat = Z | S Nat
 
+-- | A @BaseCases n ('Rep' a)@ constraint basically provides the list of values
+-- of type @a@ with depth at most @n@.
 class BaseCases (n :: Nat) f where
   baseCases :: Tagged n [[f p]]
+
+-- | For convenience.
+type BaseCases' n a = (Generic a, BaseCases n (Rep a))
 
 baseCases' :: forall n f p. BaseCases n f => Tagged n [f p]
 baseCases' = (Tagged . concat . unTagged) (baseCases @n)
