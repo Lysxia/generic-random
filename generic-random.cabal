@@ -19,8 +19,10 @@ library
   exposed-modules:
     Generic.Random.Boltzmann
     Generic.Random.Data
+    Generic.Random.Generic
     Generic.Random.Internal.Common
     Generic.Random.Internal.Data
+    Generic.Random.Internal.Generic
     Generic.Random.Internal.Oracle
     Generic.Random.Internal.Solver
     Generic.Random.Internal.Types
