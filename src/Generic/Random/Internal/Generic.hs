@@ -80,7 +80,7 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- >   deriving Generic
 -- >
 -- > instance Arbitrary Tree' where
--- >   arbitrary = genericArbitraryFrequency' [1, 2, 3]
+-- >   arbitrary = genericArbitraryFrequency' @'Z [1, 2, 3]
 --
 -- 'genericArbitraryFrequency'' is equivalent to:
 --
