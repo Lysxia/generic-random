@@ -19,7 +19,6 @@ import Data.Coerce
 import Data.Function
 import Data.Foldable
 import Data.List
-import Data.List.Split
 import Data.Maybe
 import Data.Vector ( Vector )
 import qualified Data.Vector as V
