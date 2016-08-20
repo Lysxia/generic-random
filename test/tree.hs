@@ -1,59 +1,66 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 import Control.Monad
 import Data.Data
 import Data.Foldable
+import Data.IORef
 import Data.List
-import Test.QuickCheck
+import System.Exit
+import System.IO
+
 import Generic.Random.Data
+import Generic.Random.Internal.Data
 
-data T = N T T | L
-  deriving (Eq, Ord, Show, Data)
+import Test.Tree
+import Test.Stats
 
--- size
-s :: T -> Int
-s (N l r) = 1 + s l + s r
-s L = 0
+eps, del :: Double
+eps = 0.01
+del = 0.001
 
-main =
-  for_ [ 4 ^ e | e <- [2 .. 4] ] $ \n ->
-    for_
-      [ ("reject ", generatorSR)
-      , ("rejectSimple ", generatorR')
-      , ("point ", generatorP')
-      , ("pointReject ", generatorPR')
-      ] $ \(name, g) ->
-      stats (name ++ show n) s (g n)
+-- | Periodically print stuff so that Travis does not think we're stuck.
+counting x gen = do
+  modifyIORef x (+ 1)
+  readIORef x >>= \x ->
+    when (x `mod` 1000 == 0) $ putStr "." >> hFlush stdout
+  gen
 
-stats :: String -> (a -> Int) -> Gen a -> IO ()
-stats s f g = do
-  putStrLn s
-  xs <- replicateM 1000 (fmap f (generate g))
-  putStrLn $ "Mean: " ++ show (mean xs)
-  pp (histogram xs)
+main = do
+  success <- newIORef True
+
+  let n = 64
+      range = tolerance epsilon n
+
+  for_
+    [ ( "reject "
+      , generatorSR
+      , expected Nothing range eps del
+      )
+    , ( "rejectSimple "
+      , generatorR'
+      , expected (Just (fromIntegral n)) range eps del
+      )
+    ] $ \(name, g, kdist) -> do
+    putStrLn $ name ++ show n
+    let gen = (fmap size . asMonadRandom . g) n
+    x <- newIORef 0
+    (expectedDist, estimatedDist, diff) <- runExperiment kdist (counting x gen)
+    putStrLn ""
+    when (diff > eps) $ do
+      writeIORef success False
+      putStrLn $ "FAIL > " ++ show diff
+      print expectedDist
+      print estimatedDist
+
+  let k = 80000
+      eps = 0.1
+      gen = (fmap size . asMonadRandom . generatorP') n
+  putStrLn $ "pointed " ++ show n
+  x <- newIORef 0
+  sizes <- replicateM k (counting x gen)
   putStrLn ""
+  let diff = abs (mean sizes - fromIntegral (n `div` 2))
+  when (diff > eps) $ do
+    writeIORef success False
+    putStrLn $ "FAIL > " ++ show diff
 
-histogram xs' = (bounds, bins)
-  where
-    (xs, ys) = splitAt (95 * length xs' `div` 100) (sort xs')
-    xMin = minimum xs
-    xMax = maximum xs
-    bounds
-      | xMax - xMin < 20 = [xMin .. xMax]
-      | otherwise = [xMin, xMin + (xMax - xMin) `div` 10 .. xMax]
-    bins = f bounds xs
-    f (_ : b1 : bs) xs =
-      let (a, ys) = span (< b1) xs
-      in length a : f (b1 : bs) ys
-    f _ xs = [length xs + length ys]
-
-pp :: ([Int], [Int]) -> IO ()
-pp (vs, bs) = do
-  putStrLn $ vs >>= \v -> three v ++ " - "
-  putStrLn $ bs >>= \b -> " | " ++ three b
-
-three x = replicate (3 - length s) ' ' ++ s
-  where
-    s = show x
-
-mean :: Foldable v => v Int -> Double
-mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
+  success <- readIORef success
+  unless success exitFailure

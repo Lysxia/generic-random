@@ -51,6 +51,9 @@ test-suite test-tree
     base,
     QuickCheck,
     generic-random
+  other-modules:
+    Test.Stats,
+    Test.Tree
 
 benchmark bench-binarytree
   type:             exitcode-stdio-1.0
