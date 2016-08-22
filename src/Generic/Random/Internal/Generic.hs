@@ -1,8 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
-{-# LANGUAGE TypeApplications, TypeOperators #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveFunctor, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE AllowAmbiguousTypes, ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds, KindSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ConstraintKinds #-}
 module Generic.Random.Internal.Generic where
 
@@ -29,8 +28,9 @@ import Test.QuickCheck
 -- For instance for @Tree a@ values are finite but the average number of
 -- @Leaf@ and @Node@ constructors is infinite.
 
-genericArbitrary :: (Generic a, GA Unsized (Rep a)) => Gen a
-genericArbitrary = ($ repeat 1) . unFreq . fmap to $ ga @Unsized
+genericArbitrary :: forall a. (Generic a, GA Unsized (Rep a)) => Gen a
+genericArbitrary =
+  (($ repeat 1) . unFreq . fmap to) (ga :: Freq Unsized (Rep a p))
 
 
 -- | This allows to specify the probability distribution of constructors
@@ -46,30 +46,28 @@ genericArbitrary = ($ repeat 1) . unFreq . fmap to $ ga @Unsized
 -- >     ]
 
 genericArbitraryFrequency
-  :: (Generic a, GA Unsized (Rep a))
+  :: forall a. (Generic a, GA Unsized (Rep a))
   => [Int]  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
+genericArbitraryFrequency = (unFreq . fmap to) (ga :: Freq Unsized (Rep a p))
 
 
 -- | The size parameter of 'Gen' is divided among the fields of the chosen
 -- constructor.  When it reaches zero, the generator selects a finite term
 -- whenever it can find any of the given type.
 --
--- The type of 'genericArbitraryFrequency'' has an ambiguous @n@ parameter; it
--- is a type-level natural number of type 'Nat'. That number determines the
--- maximum /depth/ of terms that can be used to end recursion.
+-- The natural number @n@ determines the maximum /depth/ of terms that can be
+-- used to end recursion.
+-- It is encoded using @'Z' :: 'Z'@ and @'S' :: n -> 'S' n@.
 --
--- You'll need the @TypeApplications@ and @DataKinds@ extensions.
+-- > genericArbitraryFrequency' n weights
 --
--- > genericArbitraryFrequency' @n weights
---
--- With @n ~ ''Z'@, the generator looks for a simple nullary constructor.  If none
+-- With @n = 'Z'@, the generator looks for a simple nullary constructor.  If none
 -- exist at the current type, as is the case for our @Tree@ type, it carries on
 -- as in 'genericArbitraryFrequency'.
 --
--- > genericArbitraryFrequency' @'Z :: Arbitrary a => [Int] -> Gen (Tree a)
--- > genericArbitraryFrequency' @'Z [x, y] =
+-- > genericArbitraryFrequency' Z :: Arbitrary a => [Int] -> Gen (Tree a)
+-- > genericArbitraryFrequency' Z [x, y] =
 -- >   frequency
 -- >     [ (x, Leaf <$> arbitrary)
 -- >     , (y, scale (`div` 2) $ Node <$> arbitrary <*> arbitrary)
@@ -82,12 +80,12 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- >   deriving Generic
 -- >
 -- > instance Arbitrary Tree' where
--- >   arbitrary = genericArbitraryFrequency' @'Z [1, 2, 3]
+-- >   arbitrary = genericArbitraryFrequency' Z [1, 2, 3]
 --
 -- 'genericArbitraryFrequency'' is equivalent to:
 --
--- > genericArbitraryFrequency' @'Z :: [Int] -> Gen Tree'
--- > genericArbitraryFrequency' @'Z [x, y, z] =
+-- > genericArbitraryFrequency' Z :: [Int] -> Gen Tree'
+-- > genericArbitraryFrequency' Z [x, y, z] =
 -- >   sized $ \n ->
 -- >     if n == 0 then
 -- >       -- If the size parameter is zero, the non-nullary alternative is discarded.
@@ -110,11 +108,11 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 -- of this parameter depends on the concrete type the generator is used for.
 --
 -- For instance, if we want to generate a value of type @Tree ()@, there is a
--- value of depth 1 (represented by @''S' ''Z'@) that we can use to end
+-- value of depth 1 (represented by @'S' 'Z'@) that we can use to end
 -- recursion: @Leaf ()@.
 --
--- > genericArbitraryFrequency' @('S 'Z) :: [Int] -> Gen (Tree ())
--- > genericArbitraryFrequency' @('S 'Z) [x, y] =
+-- > genericArbitraryFrequency' (S Z) :: [Int] -> Gen (Tree ())
+-- > genericArbitraryFrequency' (S Z) [x, y] =
 -- >   sized $ \n ->
 -- >     if n == 0 then
 -- >       return (Leaf ())
@@ -130,29 +128,33 @@ genericArbitraryFrequency = unFreq . fmap to $ ga @Unsized
 --
 -- @FlexibleContexts@ and @UndecidableInstances@ are also required.
 --
--- > instance (Arbitrary a, Generic a, BaseCases 'Z (Rep a))
+-- > instance (Arbitrary a, Generic a, BaseCases Z (Rep a))
 -- >   => Arbitrary (Tree a) where
--- >   arbitrary = genericArbitraryFrequency' @('S 'Z) [1, 2]
+-- >   arbitrary = genericArbitraryFrequency' (S Z) [1, 2]
 --
 -- A synonym is provided for brevity.
 --
--- > instance (Arbitrary a, BaseCases' 'Z a) => Arbitrary (Tree a) where
--- >   arbitrary = genericArbitraryFrequency' @('S 'Z) [1, 2]
+-- > instance (Arbitrary a, BaseCases' Z a) => Arbitrary (Tree a) where
+-- >   arbitrary = genericArbitraryFrequency' (S Z) [1, 2]
 
 genericArbitraryFrequency'
-  :: forall (n :: Nat) a
+  :: forall n a
   . (Generic a, GA (Sized n) (Rep a))
-  => [Int]  -- ^ List of weights for every constructor
+  => n
+  -> [Int]  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitraryFrequency' = unFreq . fmap to $ ga @(Sized n)
+genericArbitraryFrequency' _ =
+  (unFreq . fmap to) (ga :: Freq (Sized n) (Rep a p))
 
 
 -- | Like 'genericArbitraryFrequency'', but with uniformly distributed
 -- constructors.
 
 genericArbitrary'
-  :: forall (n :: Nat) a. (Generic a, GA (Sized n) (Rep a)) => Gen a
-genericArbitrary' = ($ repeat 1) . unFreq . fmap to $ ga @(Sized n)
+  :: forall n a
+  . (Generic a, GA (Sized n) (Rep a)) => n -> Gen a
+genericArbitrary' _ =
+  (($ repeat 1) . unFreq . fmap to) (ga :: Freq (Sized n) (Rep a p))
 
 
 -- * Internal
@@ -167,7 +169,7 @@ instance Applicative (Freq sized) where
 newtype Gen' sized a = Gen' { unGen' :: Gen a }
   deriving (Functor, Applicative)
 
-data Sized :: Nat -> *
+data Sized n
 data Unsized
 
 liftGen :: Gen a -> Freq sized a
@@ -246,21 +248,24 @@ instance (GAProduct f, GAProduct g) => GAProduct (f :*: g) where
       (n, b) = gaProduct
 
 
-newtype Tagged (a :: Nat) b = Tagged { unTagged :: b }
+newtype Tagged a b = Tagged { unTagged :: b }
 
--- | Peano-encoded natural numbers.
-data Nat = Z | S Nat
+-- | Zero
+data Z = Z
+
+-- | Successor
+data S n = S n
 
 -- | A @BaseCases n ('Rep' a)@ constraint basically provides the list of values
 -- of type @a@ with depth at most @n@.
-class BaseCases (n :: Nat) f where
+class BaseCases n f where
   baseCases :: Tagged n [[f p]]
 
 -- | For convenience.
 type BaseCases' n a = (Generic a, BaseCases n (Rep a))
 
 baseCases' :: forall n f p. BaseCases n f => Tagged n [f p]
-baseCases' = (Tagged . concat . unTagged) (baseCases @n)
+baseCases' = (Tagged . concat . unTagged) (baseCases :: Tagged n [[f p]])
 
 instance BaseCases n U1 where
   baseCases = Tagged [[U1]]
@@ -268,19 +273,21 @@ instance BaseCases n U1 where
 instance BaseCases n f => BaseCases n (M1 i c f) where
   baseCases = (coerce :: Tagged n [[f p]] -> Tagged n [[M1 i c f p]]) baseCases
 
-instance BaseCases 'Z (K1 i c) where
+instance BaseCases Z (K1 i c) where
   baseCases = Tagged [[]]
 
-instance (Generic c, BaseCases n (Rep c)) => BaseCases ('S n) (K1 i c) where
-  baseCases = (Tagged . (fmap . fmap) (K1 . to) . unTagged) (baseCases @n)
+instance (Generic c, BaseCases n (Rep c)) => BaseCases (S n) (K1 i c) where
+  baseCases =
+    (Tagged . (fmap . fmap) (K1 . to) . unTagged)
+      (baseCases :: Tagged n [[Rep c p]])
 
 instance (BaseCases n f, BaseCases n g) => BaseCases n (f :+: g) where
   baseCases = Tagged $
-    (fmap . fmap) L1 (unTagged (baseCases @n)) ++
-    (fmap . fmap) R1 (unTagged (baseCases @n))
+    ((fmap . fmap) L1 . unTagged) (baseCases :: Tagged n [[f p]]) ++
+    ((fmap . fmap) R1 . unTagged) (baseCases :: Tagged n [[g p]])
 
 instance (BaseCases n f, BaseCases n g) => BaseCases n (f :*: g) where
   baseCases = Tagged
     [ liftA2 (:*:)
-        (unTagged (baseCases' @n))
-        (unTagged (baseCases' @n)) ]
+        (unTagged (baseCases' :: Tagged n [f p]))
+        (unTagged (baseCases' :: Tagged n [g p])) ]

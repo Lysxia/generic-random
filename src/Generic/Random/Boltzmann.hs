@@ -5,11 +5,11 @@
 -- the library takes care of computing the oracles and setting the right
 -- distributions.
 
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, GADTs, RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor, DeriveGeneric, ImplicitParams #-}
 {-# LANGUAGE RecordWildCards, DeriveDataTypeable #-}
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
-{-# LANGUAGE TypeApplications #-}
 module Generic.Random.Boltzmann where
 
 import Control.Applicative
@@ -86,10 +86,13 @@ solve
   :: forall b c
   . (forall a. Num a => System (ConstModule a) b c)
   -> Double -> Maybe (Vector Double)
-solve s x = fixedPoint defSolveArgs phi' (V.replicate (dim (s @Int)) 0)
+solve s x = fixedPoint defSolveArgs phi' (V.replicate (dim s') 0)
   where
     phi' :: forall a. (AD.Mode a, AD.Scalar a ~ Double) => Endo (Vector a)
     phi' = coerce (sys s (scalar (AD.auto x)) :: Endo (Vector (ConstModule a b)))
+    -- Arbitrary instantiation to get its dimension.
+    s' :: System (ConstModule Int) b c
+    s' = s
 
 sizedGenerator
   :: forall b c m

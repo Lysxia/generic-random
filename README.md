@@ -40,9 +40,7 @@ Define sized random generators for almost any type.
 Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerplate.
 
 ```haskell
-    {-# LANGUAGE DataKinds #-}
     {-# LANGUAGE DeriveGeneric #-}
-    {-# LANGUAGE TypeApplications #-}
 
     import GHC.Generics ( Generic )
     import Test.QuickCheck
@@ -52,7 +50,7 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
       deriving (Show, Generic)
 
     instance Arbitrary a => Arbitrary (Tree a) where
-      arbitrary = genericArbitrary' @'Z
+      arbitrary = genericArbitrary' Z
 
     -- Equivalent to
     -- > arbitrary =

@@ -22,7 +22,8 @@ module Generic.Random.Generic
   , genericArbitraryFrequency
   , genericArbitraryFrequency'
   , genericArbitrary'
-  , Nat (..)
+  , Z (..)
+  , S (..)
   , BaseCases'
   , BaseCases
   ) where
