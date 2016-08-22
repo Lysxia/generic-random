@@ -57,7 +57,7 @@ expected avgSize' (minSize_, maxSize_) epsilon delta = (k, d)
     d = zip [minSize ..] (fmap (/ sum d_) d_)
 
 runExperiment
-  :: (Fractional a, Ord a, Applicative m)
+  :: (Fractional a, Ord a, Monad m)
   => (Int, [(Int, a)]) -> m Int -> m ([(Int, a)], [(Int, a)], a)
 runExperiment (k, d) gen = cmp' . collect <$> replicateM k gen
   where
