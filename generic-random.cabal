@@ -10,7 +10,7 @@ author:              Li-yao Xia
 maintainer:          lysxia@gmail.com
 category:            Generics, Testing
 build-type:          Simple
-extra-source-files:  README.md
+extra-source-files:  README.md CHANGELOG.md
 cabal-version:       >=1.10
 tested-with:         GHC == 7.10.3, GHC == 8.0.1
 
