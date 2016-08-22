@@ -3,10 +3,7 @@
 -- Here is an example. Define your type.
 --
 -- > data Tree a = Leaf a | Node (Tree a) (Tree a)
---
--- Derive 'GHC.Generics.Generic'.
---
--- >   deriving 'Generic'  -- Turn on the DeriveGeneric extension
+-- >   deriving Generic
 --
 -- Pick an arbitrary implementation.
 --
@@ -18,12 +15,19 @@
 -- @arbitrary@.
 
 module Generic.Random.Generic
-  ( genericArbitrary
+  (
+    -- * Arbitrary implementations
+    genericArbitrary
   , genericArbitraryFrequency
   , genericArbitraryFrequency'
   , genericArbitrary'
+
+    -- * Type-level natural numbers
+    -- $nat
   , Z (..)
   , S (..)
+
+    -- * Generic class for finite values
   , BaseCases'
   , BaseCases
   ) where

@@ -250,6 +250,11 @@ instance (GAProduct f, GAProduct g) => GAProduct (f :*: g) where
 
 newtype Tagged a b = Tagged { unTagged :: b }
 
+-- $nat
+-- Use the 'Z' and 'S' data types to define the depths of values used
+-- by 'genericArbitraryFrequency'' and 'genericArbitrary'' to make
+-- generators terminate.
+
 -- | Zero
 data Z = Z
 
