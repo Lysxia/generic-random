@@ -50,6 +50,7 @@ main = do
       print expectedDist
       print estimatedDist
 
+{-
   let k = 80000
       eps = 0.1
       gen = (fmap size . asMonadRandom . generatorP') n
@@ -61,6 +62,7 @@ main = do
   when (diff > eps) $ do
     writeIORef success False
     putStrLn $ "FAIL > " ++ show diff
+-}
 
   success <- readIORef success
   unless success exitFailure
