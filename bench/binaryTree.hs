@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, TemplateHaskell #-}
 module Main where
 
 import Control.Applicative
@@ -10,6 +10,7 @@ import Data.Functor
 import GHC.Generics
 import Control.DeepSeq
 import Criterion.Main
+import Test.Feat
 import Test.QuickCheck
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Random
@@ -19,9 +20,15 @@ import Generic.Random.Internal.Data
 import Generic.Random.Internal.Types
 
 data T = N T T | L
-  deriving (Eq, Ord, Show, Data, Generic)
+  deriving (Eq, Ord, Show, Data, Typeable, Generic)
 
 instance NFData T
+
+deriveEnumerable ''T
+
+size :: Num a => T -> a
+size L = 1
+size (N l r) = 1 + size l + size r
 
 gen1 :: Int -> Gen T
 gen1 n = runRejectT (tolerance epsilon (n + 1)) gen'
@@ -39,12 +46,24 @@ gen2 n = g
         (k (n+1) L)
         (gen' (n+1) $ \m l -> gen' m $ \m r -> k m (N l r))
 
-main = getGs >>= \gs -> defaultMain $ liftA2 (\n f -> f n gs)
-  [4 ^ e | e <- [1 .. 5]]
+genFeat :: Int -> Gen T
+genFeat = uniform
+
+main = newQCGen >>= \g -> defaultMain $ liftA2 (\n f -> f n g)
+  [4 ^ e | e <- [1 .. 6]]
 
   -- Singular rejection sampling
   [ bg "handwritten1" gen1
   , bg "handwritten2" gen2
+
+  , bg "feat" genFeat
+
+  -- Pointed generator
+  , bg "P" generatorP'
+
+  -- Pointed generator with rejection sampling
+  , bg "PR" generatorPR'
+
   , bg "SR" generatorSR
 
   -- Sized rejection sampling
@@ -53,26 +72,25 @@ main = getGs >>= \gs -> defaultMain $ liftA2 (\n f -> f n gs)
   -- Sized rejection sampling, not memoizing oracle
   , bg' "R-recomp" generatorR'
 
-  -- Pointed generator
-  , bg "P" generatorP'
-
-  -- Pointed generator with rejection sampling
-  , bg "PR" generatorPR'
-
   -- Pointed generator, not memoizing oracle
   , bg' "P-recomp" generatorP'
   ]
 
-bg, bg' :: String -> (Int -> Gen T) -> Int -> [QCGen] -> Benchmark
-bg name gen n gs =
-  bench (name ++ "_" ++ show n) $
-    nf (fmap (\g -> unGen gg g 0)) gs
+bg, bg' :: String -> (Int -> Gen T) -> Int -> QCGen -> Benchmark
+bg name gen n g =
+  bench (name ++ "_" ++ show n) $ nf f g
   where
+    go 0 = return (0 :: Int)
+    go k = liftA2 (\t s -> size t + s) gg (go (k-1))
     gg = gen n
+    f g = unGen (go 100) g 0
 
-bg' name gen n gs =
-  bench (name ++ "_" ++ show n) $
-    nf (fmap (\(n, g) -> unGen (gen n) g 0)) (fmap ((,) n) gs)
+bg' name gen n g =
+  bench (name ++ "_" ++ show n) $ nf f (n, g)
+  where
+    go n 0 = return (0 :: Int)
+    go n k = liftA2 (\t s -> size t + s) (gen n) (go n (k-1))
+    f (n, g) = unGen (go n 100) g 0
 
-getGs :: IO [QCGen]
-getGs = replicateM 100 newQCGen
+avgSize :: [T] -> Double
+avgSize ts = sum (fmap size ts) / fromIntegral (length ts)

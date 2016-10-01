@@ -66,6 +66,7 @@ benchmark bench-binarytree
     deepseq,
     QuickCheck,
     transformers,
+    testing-feat,
     generic-random
 
 source-repository head
