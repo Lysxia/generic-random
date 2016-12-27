@@ -1,3 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds #-}
+
 import Control.Monad
 import Data.Data
 import Data.Foldable
@@ -5,6 +9,8 @@ import Data.IORef
 import Data.List
 import System.Exit
 import System.IO
+
+import Options.Generic
 
 import Generic.Random.Data
 import Generic.Random.Internal.Data
@@ -23,10 +29,14 @@ counting x gen = do
     when (x `mod` 1000 == 0) $ putStr "." >> hFlush stdout
   gen
 
+-- | Invocation: stack test [--test-arguments TEST_SIZE]
+type Input = Maybe (Int <?> "Test size")
+
 main = do
+  n_ <- getRecord "Test program" :: IO Input
   success <- newIORef True
 
-  let n = 64
+  let n = maybe 10 unHelpful n_
       range = tolerance epsilon n
 
   for_

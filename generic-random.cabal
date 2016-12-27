@@ -61,6 +61,7 @@ test-suite test-tree
     build-depends:
       base,
       QuickCheck,
+      optparse-generic,
       generic-random
   else
     buildable: False
