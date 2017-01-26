@@ -50,7 +50,7 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
       deriving (Show, Generic)
 
     instance Arbitrary a => Arbitrary (Tree a) where
-      arbitrary = genericArbitrary' Z
+      arbitrary = genericArbitrary' Z uniform
 
     -- Equivalent to
     -- > arbitrary =
@@ -66,7 +66,7 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
     main = sample (arbitrary :: Gen (Tree ()))
 ```
 
-- User-specified distribution of constructors.
+- User-specified distribution of constructors, with compile-time checks.
 - A simple (optional) strategy to ensure termination: `Test.QuickCheck.Gen`'s
   size parameter decreases at every recursive `genericArbitrary'` call; when it
   reaches zero, sample directly from a finite set of finite values.
