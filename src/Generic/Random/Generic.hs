@@ -8,7 +8,7 @@
 -- Pick an arbitrary implementation.
 --
 -- > instance Arbitrary a => Arbitrary (Tree a) where
--- >   arbitrary = genericArbitraryFrequency [9, 8]
+-- >   arbitrary = genericArbitrary (weights (9 % 8 % ()))
 --
 -- @arbitrary :: 'Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
 -- @Node@ with probability 8\/17, and recursively fills their fields with
@@ -18,18 +18,24 @@ module Generic.Random.Generic
   (
     -- * Arbitrary implementations
     genericArbitrary
-  , genericArbitraryFrequency
-  , genericArbitraryFrequency'
   , genericArbitrary'
+
+    -- * Specifying finite distributions
+  , Weights
+  , W
+  , weights
+  , (%)
+  , uniform
 
     -- * Type-level natural numbers
     -- $nat
   , Z (..)
   , S (..)
 
-    -- * Generic class for finite values
+    -- * Generic classes for finite values
   , BaseCases'
   , BaseCases
+  , ListBaseCases
   ) where
 
 import Generic.Random.Internal.Generic
