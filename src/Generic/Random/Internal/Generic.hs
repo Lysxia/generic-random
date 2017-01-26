@@ -204,7 +204,7 @@ uniform =
   in Weights w n
 
 type family First a :: Symbol where
-  First (a :| _) = First a
+  First (a :| _b) = First a
   First (L c) = c
 
 class WeightBuilder a where
