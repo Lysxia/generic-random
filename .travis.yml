@@ -31,7 +31,7 @@ matrix:
 before_install:
  - unset CC
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
- - FLAGS=( "--enable-tests" "--enable-benchmarks" "--flags=test" )
+#- FLAGS=( "--enable-tests" "--enable-benchmarks" "--flags=test" )
 
 install:
  - cabal --version
