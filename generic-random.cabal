@@ -71,6 +71,7 @@ benchmark bench-binarytree
   hs-source-dirs:   bench
   main-is:          binaryTree.hs
   default-language: Haskell2010
+  ghc-options: -O2
   if flag(test)
     build-depends:
       base,
