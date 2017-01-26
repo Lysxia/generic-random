@@ -77,7 +77,7 @@ script:
  - cabal build   # this builds all libraries and executables (including tests/benchmarks)
 
  # Test
- - ./dist/build/test-tree/test-tree
+#- ./dist/build/test-tree/test-tree
 
  - cabal check
  - cabal sdist   # tests that a source-distribution can be generated
