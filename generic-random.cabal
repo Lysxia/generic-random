@@ -12,7 +12,7 @@ category:            Generics, Testing
 build-type:          Simple
 extra-source-files:  README.md CHANGELOG.md
 cabal-version:       >=1.10
-tested-with:         GHC == 7.10.3, GHC == 8.0.1
+tested-with:         GHC == 8.0.1
 
 flag test
   Description:
@@ -34,7 +34,7 @@ library
     Generic.Random.Internal.Solver
     Generic.Random.Internal.Types
   build-depends:
-    base >= 4.8 && < 5,
+    base >= 4.9 && < 4.10,
     containers,
     hashable,
     unordered-containers,
