@@ -162,8 +162,8 @@ genericArbitrary' _ (Weights w n) =
 
 type family Weights_ (f :: * -> *) :: * where
   Weights_ (f :+: g) = Weights_ f :| Weights_ g
-  Weights_ (M1 D _ f) = Weights_ f
-  Weights_ (M1 C ('MetaCons c _ _) _) = L c
+  Weights_ (M1 D _c f) = Weights_ f
+  Weights_ (M1 C ('MetaCons c _i _j) _f) = L c
 
 data a :| b = N a Int b
 data L (c :: Symbol) = L
@@ -313,7 +313,7 @@ instance (GAProduct f, GAProduct g) => GAProduct (f :*: g) where
 
 type family Arity f :: Nat where
   Arity (f :*: g) = Arity f + Arity g
-  Arity (M1 _ _ _) = 1
+  Arity (M1 _i _c _f) = 1
 
 
 newtype Tagged a b = Tagged { unTagged :: b }
