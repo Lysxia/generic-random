@@ -139,7 +139,7 @@ genericArbitrary (Weights w n) = (unGen' . fmap to) (ga w n :: Gen' Unsized (Rep
 --
 -- @FlexibleContexts@ and @UndecidableInstances@ are also required.
 --
--- > instance (Arbitrary a, Generic a, BaseCases Z (Rep a))
+-- > instance (Arbitrary a, Generic a, ListBaseCases Z (Rep a))
 -- >   => Arbitrary (Tree a) where
 -- >   arbitrary = genericArbitrary' (S Z) (weights (1 % 2 % ()))
 --
