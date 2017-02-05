@@ -51,10 +51,13 @@
 -- 'weighted' (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
--- This will not.
+-- This will not: the first requires an order of constructors different from
+-- the definition of the @Tree@ type; the second doesn't have the right number
+-- of weights.
 --
 -- @
 -- 'weighted' ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
+-- 'weighted' (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- === Uniform distribution
@@ -116,7 +119,7 @@
 -- @
 -- data Tree' = Leaf1 | Leaf2 | Node3 Tree' Tree' Tree'
 --   deriving Generic
--- 
+--
 -- instance Arbitrary Tree' where
 --   arbitrary = 'genericArbitrary'' 'Z' ('weights' (1 '%' 2 '%' 3 '%' ()))
 -- @
