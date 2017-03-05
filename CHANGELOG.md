@@ -1,3 +1,7 @@
+# 0.4.1.0
+
+- Move Boltzmann sampler modules to another package: boltzmann-samplers
+
 # 0.4.0.0
 
 - Check well-formedness of constructor distributions at compile time.
