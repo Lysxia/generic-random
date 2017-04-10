@@ -1,3 +1,7 @@
+# 0.5.0.0
+
+- Turn off dependency on boltzmann-samplers by default
+
 # 0.4.1.0
 
 - Move Boltzmann sampler modules to another package: boltzmann-samplers
