@@ -27,7 +27,9 @@
 --
 -- The list of weights is built up with the @('%')@ operator as a cons, and using
 -- the unit @()@ as the empty list, in the order corresponding to the data type
--- definition.
+-- definition. The uniform distribution can be obtained with 'uniform'.
+--
+-- === Example
 --
 -- For @Tree@, 'genericArbitrary' produces code equivalent to the following:
 --
@@ -39,6 +41,18 @@
 --     , (y, Node \<$\> arbitrary \<*\> arbitrary)
 --     ]
 -- @
+--
+-- === Uniform distribution
+--
+-- You can specify the uniform distribution (all weights equal) with 'uniform'.
+-- 'genericArbitraryU' is available as a shorthand for
+-- @'genericArbitrary' 'uniform'@.
+--
+-- Note that for many types, a uniform distribution tends to produce big
+-- values. For instance for @Tree a@, generated values are finite but the
+-- __average__ number of @Leaf@ and @Node@ constructors is __infinite__.
+--
+-- === Checked weights
 --
 -- The weights actually have type @'W' \"ConstructorName\"@ (just a newtype
 -- around 'Int'), so that you can annotate a weight with its corresponding
@@ -59,26 +73,6 @@
 -- 'weighted' ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
 -- 'weighted' (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
 -- @
---
--- === Uniform distribution
---
--- You can specify the uniform distribution with 'uniform'.
---
--- For @Tree@, @'genericArbitrary' 'uniform'@ produces code equivalent to the
--- following:
---
--- @
--- 'genericArbitrary' 'uniform' :: Arbitrary a => Gen (Tree a)
--- 'genericArbitrary' 'uniform' =
---   oneof
---     [ Leaf \<$\> arbitrary                -- Uses Arbitrary a
---     , Node \<$\> arbitrary \<*\> arbitrary  -- Uses Arbitrary (Tree a)
---     ]
--- @
---
--- Note that for many types, a uniform distribution tends to produce big
--- values. For instance for @Tree a@, generated values are finite but the
--- __average__ number of @Leaf@ and @Node@ constructors is __infinite__.
 --
 -- == Ensuring termination
 --
@@ -191,7 +185,10 @@ module Generic.Random.Generic
   (
     -- * Arbitrary implementations
     genericArbitrary
+  , genericArbitraryU
   , genericArbitrary'
+  , genericArbitraryU0
+  , genericArbitraryU1
 
     -- * Specifying finite distributions
   , Weights

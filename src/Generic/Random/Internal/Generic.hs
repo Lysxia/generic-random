@@ -27,12 +27,19 @@ import Test.QuickCheck
 genericArbitrary
   :: forall a
   .  (Generic a, GA Unsized (Rep a))
-  => Weights a
+  => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary (Weights w n) = (unGen' . fmap to) (ga w n :: Gen' Unsized (Rep a p))
 
--- | Like 'genericArbitrary'', with bounded size to ensure termination for
--- recursive types.
+-- | Shorthand for @'genericArbitrary' 'uniform'@.
+genericArbitraryU
+  :: forall a
+  .  (Generic a, GA Unsized (Rep a), UniformWeight (Weights_ (Rep a)))
+  => Gen a
+genericArbitraryU = genericArbitrary uniform
+
+-- | Like 'genericArbitrary'', with decreasing size to ensure termination for
+-- recursive types, looking for base cases once the size reaches 0.
 genericArbitrary'
   :: forall n a
   . (Generic a, GA (Sized n) (Rep a))
@@ -42,6 +49,21 @@ genericArbitrary'
 genericArbitrary' _ (Weights w n) =
   (unGen' . fmap to) (ga w n :: Gen' (Sized n) (Rep a p))
 
+-- | Shorthand for @'genericArbitrary'' 'Z' 'uniform'@, using nullary
+-- constructors as the base cases.
+genericArbitraryU0
+  :: forall n a
+  . (Generic a, GA (Sized Z) (Rep a), UniformWeight (Weights_ (Rep a)))
+  => Gen a
+genericArbitraryU0 = genericArbitrary' Z uniform
+
+-- | Shorthand for @'genericArbitrary'' ('S' 'Z') 'uniform'@, using nullary
+-- constructors and constructors whose fields are all nullary as base cases.
+genericArbitraryU1
+  :: forall n a
+  . (Generic a, GA (Sized (S Z)) (Rep a), UniformWeight (Weights_ (Rep a)))
+  => Gen a
+genericArbitraryU1 = genericArbitrary' (S Z) uniform
 
 -- * Internal
 

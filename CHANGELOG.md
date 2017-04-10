@@ -1,6 +1,7 @@
 # 0.5.0.0
 
 - Turn off dependency on boltzmann-samplers by default
+- Add genericArbitraryU, genericArbitraryU0 and genericArbitraryU1
 
 # 0.4.1.0
 
