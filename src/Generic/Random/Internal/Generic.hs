@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,8 +16,8 @@ module Generic.Random.Internal.Generic where
 
 import Control.Applicative
 import Data.Coerce
-import GHC.Exts (Proxy#, proxy#)
-import GHC.Generics hiding ( S )
+import Data.Proxy
+import GHC.Generics hiding (S, Arity)
 import GHC.TypeLits
 import Test.QuickCheck
 
@@ -70,7 +71,11 @@ genericArbitraryU1 = genericArbitrary' (S Z) uniform
 type family Weights_ (f :: * -> *) :: * where
   Weights_ (f :+: g) = Weights_ f :| Weights_ g
   Weights_ (M1 D _c f) = Weights_ f
+#if __GLASGOW_HASKELL__ >= 800
   Weights_ (M1 C ('MetaCons c _i _j) _f) = L c
+#else
+  Weights_ (M1 C _c _f) = ()
+#endif
 
 data a :| b = N a Int b
 data L (c :: Symbol) = L
@@ -132,6 +137,10 @@ instance WeightBuilder (L c) where
   type Prec (L c) r = r
   W m % prec = (L, m, prec)
 
+instance WeightBuilder () where
+  type Prec () r = r
+  W m % prec = ((), m, prec)
+
 class UniformWeight a where
   uniformWeight :: (a, Int)
 
@@ -145,6 +154,9 @@ instance (UniformWeight a, UniformWeight b) => UniformWeight (a :| b) where
 
 instance UniformWeight (L c) where
   uniformWeight = (L, 1)
+
+instance UniformWeight () where
+  uniformWeight = ((), 1)
 
 newtype Gen' sized a = Gen' { unGen' :: Gen a }
   deriving (Functor, Applicative, Monad)
@@ -166,9 +178,9 @@ instance GAProduct f => GA Unsized (M1 C c f) where
   ga _ _ = (Gen' . fmap M1) gaProduct
 
 instance (GAProduct f, KnownNat (Arity f)) => GA (Sized n) (M1 C c f) where
-  ga _ _ = Gen' (scale (`div` arity) gaProduct)
+  ga _ _ = Gen' (sized $ \n -> resize (n `div` arity) gaProduct)
     where
-      arity = fromInteger (natVal' (proxy# :: Proxy# (Arity f)))
+      arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
 
 instance (GASum (Sized n) f, GASum (Sized n) g, BaseCases n f, BaseCases n g)
   => GA (Sized n) (f :+: g) where

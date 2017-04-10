@@ -54,6 +54,8 @@
 --
 -- === Checked weights
 --
+-- /GHC 8.0.1 and above only./
+--
 -- The weights actually have type @'W' \"ConstructorName\"@ (just a newtype
 -- around 'Int'), so that you can annotate a weight with its corresponding
 -- constructor, and it will be checked that you got the order right.

@@ -2,6 +2,7 @@
 
 - Turn off dependency on boltzmann-samplers by default
 - Add genericArbitraryU, genericArbitraryU0 and genericArbitraryU1
+- Compatible with GHC 7.8.4 and GHC 7.10.3
 
 # 0.4.1.0
 
