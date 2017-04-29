@@ -53,7 +53,7 @@ genericArbitrary' _ (Weights w n) =
 -- | Shorthand for @'genericArbitrary'' 'Z' 'uniform'@, using nullary
 -- constructors as the base cases.
 genericArbitraryU0
-  :: forall n a
+  :: forall a
   . (Generic a, GA (Sized Z) (Rep a), UniformWeight (Weights_ (Rep a)))
   => Gen a
 genericArbitraryU0 = genericArbitrary' Z uniform
@@ -61,7 +61,7 @@ genericArbitraryU0 = genericArbitrary' Z uniform
 -- | Shorthand for @'genericArbitrary'' ('S' 'Z') 'uniform'@, using nullary
 -- constructors and constructors whose fields are all nullary as base cases.
 genericArbitraryU1
-  :: forall n a
+  :: forall a
   . (Generic a, GA (Sized (S Z)) (Rep a), UniformWeight (Weights_ (Rep a)))
   => Gen a
 genericArbitraryU1 = genericArbitrary' (S Z) uniform
