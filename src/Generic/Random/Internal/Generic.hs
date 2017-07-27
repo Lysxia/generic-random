@@ -17,7 +17,11 @@ module Generic.Random.Internal.Generic where
 import Control.Applicative
 import Data.Coerce
 import Data.Proxy
+#if __GLASGOW_HASKELL__ >= 800
+import GHC.Generics hiding (S)
+#else
 import GHC.Generics hiding (S, Arity)
+#endif
 import GHC.TypeLits
 import Test.QuickCheck
 
