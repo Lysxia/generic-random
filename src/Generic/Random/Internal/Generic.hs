@@ -54,6 +54,14 @@ genericArbitrary'
 genericArbitrary' _ (Weights w n) =
   (unGen' . fmap to) (ga w n :: Gen' (Sized n) (Rep a p))
 
+-- | Shorthand for @\n -> 'genericArbitrary'' n 'uniform'@.
+genericArbitraryU'
+  :: forall n a
+  . (Generic a, GA (Sized n) (Rep a), UniformWeight (Weights_ (Rep a)))
+  => n
+  -> Gen a
+genericArbitraryU' n = genericArbitrary' n uniform
+
 -- | Shorthand for @'genericArbitrary'' 'Z' 'uniform'@, using nullary
 -- constructors as the base cases.
 genericArbitraryU0

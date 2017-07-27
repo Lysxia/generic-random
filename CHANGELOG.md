@@ -1,3 +1,7 @@
+# 0.6.0.0
+
+- Add genericArbitraryU'
+
 # 0.5.0.0
 
 - Turn off dependency on boltzmann-samplers by default
