@@ -35,7 +35,7 @@
 --
 -- @
 -- 'genericArbitrary' :: Arbitrary a => 'Weights' (Tree a) -> Gen (Tree a)
--- 'genericArbitrary' ('weighted' (x '%' y '%' ())) =
+-- 'genericArbitrary' ('weights' (x '%' y '%' ())) =
 --   frequency
 --     [ (x, Leaf \<$\> arbitrary)
 --     , (y, Node \<$\> arbitrary \<*\> arbitrary)
