@@ -189,8 +189,8 @@ module Generic.Random.Generic
     genericArbitrary
   , genericArbitraryU
   , genericArbitrary'
-  , genericArbitraryU0
-  , genericArbitraryU1
+  , genericArbitraryU'
+  , genericArbitraryRec
 
     -- * Specifying finite distributions
   , Weights
@@ -199,15 +199,12 @@ module Generic.Random.Generic
   , (%)
   , uniform
 
-    -- * Type-level natural numbers
-    -- $nat
-  , Z (..)
-  , S (..)
-
-    -- * Generic classes for finite values
-  , BaseCases'
-  , BaseCases
-  , ListBaseCases
+    -- * Base cases for recursive types
+  , BaseCase
+  , baseCase
+  , BaseCaseSearch()
+  , GBaseCaseSearch()
+  , genericBCS
   ) where
 
 import Generic.Random.Internal.Generic
