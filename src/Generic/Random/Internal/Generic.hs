@@ -152,16 +152,12 @@ class GA sized f where
 instance GA sized f => GA sized (M1 D c f) where
   ga z w n = fmap M1 (ga z w n)
 
-instance GAProduct f => GA Unsized (M1 C c f) where
-  ga _ _ _ = fmap M1 gaProduct
-
-instance (GAProduct f, KnownNat (Arity f)) => GA Sized (M1 C c f) where
-  ga _ _ _ = sized $ \n -> resize (n `div` arity) gaProduct
-    where
-      arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
-
 instance (GASum sized f, GASum sized g) => GA sized (f :+: g) where
   ga = gaSum'
+
+instance GAProduct sized f => GA sized (M1 C c f) where
+  ga z _ _ = fmap M1 (gaProduct z)
+
 
 gArbitrarySingle
   :: forall sized f p c0 proxy
@@ -182,24 +178,40 @@ instance (GASum sized f, GASum sized g) => GASum sized (f :+: g) where
     | i < n = fmap L1 (gaSum z i a)
     | otherwise = fmap R1 (gaSum z (i - n) b)
 
-instance GAProduct f => GASum sized (M1 i c f) where
-  gaSum _ _ _ = gaProduct
+instance GAProduct sized f => GASum sized (M1 i c f) where
+  gaSum z _ _ = fmap M1 (gaProduct z)
 
 
-class GAProduct f where
-  gaProduct :: Gen (f p)
+class GAProduct sized f where
+  gaProduct :: proxy sized -> Gen (f p)
 
-instance GAProduct U1 where
-  gaProduct = pure U1
+instance GAProduct' f => GAProduct Unsized f where
+  gaProduct _ = gaProduct'
 
-instance Arbitrary c => GAProduct (K1 i c) where
-  gaProduct = fmap K1 arbitrary
+instance (GAProduct' f, KnownNat (Arity f)) => GAProduct Sized f where
+  gaProduct _ = sized $ \n -> resize (n `div` arity) gaProduct'
+    where
+      arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
 
-instance GAProduct f => GAProduct (M1 i c f) where
-  gaProduct = fmap M1 gaProduct
+instance {-# OVERLAPPING #-} GAProduct Sized U1 where
+  gaProduct _ = pure U1
 
-instance (GAProduct f, GAProduct g) => GAProduct (f :*: g) where
-  gaProduct = liftA2 (:*:) gaProduct gaProduct
+
+class GAProduct' f where
+  gaProduct' :: Gen (f p)
+
+instance GAProduct' U1 where
+  gaProduct' = pure U1
+
+instance Arbitrary c => GAProduct' (K1 i c) where
+  gaProduct' = fmap K1 arbitrary
+
+instance (GAProduct' f, GAProduct' g) => GAProduct' (f :*: g) where
+  gaProduct' = liftA2 (:*:) gaProduct' gaProduct'
+
+instance GAProduct' f => GAProduct' (M1 i c f) where
+  gaProduct' = fmap M1 gaProduct'
+
 
 type family Arity f :: Nat where
   Arity (f :*: g) = Arity f + Arity g
