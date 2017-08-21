@@ -54,8 +54,29 @@ class BaseCaseSearch (a :: *) (z :: Nat) (e :: *) where
     => proxy '(z, e) -> IfM b Gen Proxy a
   baseCaseSearch = gBaseCaseSearch
 
+
+type instance Found Char z = 'Just 0
+instance BaseCaseSearch Char z e where
+  baseCaseSearch _ = arbitrary
+
 type instance Found Int z = 'Just 0
 instance BaseCaseSearch Int z e where
+  baseCaseSearch _ = arbitrary
+
+type instance Found Integer z = 'Just 0
+instance BaseCaseSearch Integer z e where
+  baseCaseSearch _ = arbitrary
+
+type instance Found Float z = 'Just 0
+instance BaseCaseSearch Float z e where
+  baseCaseSearch _ = arbitrary
+
+type instance Found Double z = 'Just 0
+instance BaseCaseSearch Double z e where
+  baseCaseSearch _ = arbitrary
+
+type instance Found Word z = 'Just 0
+instance BaseCaseSearch Word z e where
   baseCaseSearch _ = arbitrary
 
 type instance Found () z = 'Just 0
@@ -72,7 +93,13 @@ instance BaseCaseSearch [a] z e where
 
 type instance Found (Either a b) z = Found' a z ||? Found' b z
 instance GBaseCaseSearch (Either a b) z e => BaseCaseSearch (Either a b) z e where
-  baseCaseSearch = gBaseCaseSearch
+
+type instance Found (a, b) z = Found' a z &&? Found' b z
+instance GBaseCaseSearch (a, b) z e => BaseCaseSearch (a, b) z e where
+
+type instance Found Ordering z = 'Just 0
+instance BaseCaseSearch Ordering z e where
+  baseCaseSearch _ = arbitrary
 
 
 instance {-# INCOHERENT #-}
