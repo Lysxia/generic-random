@@ -1,10 +1,10 @@
--- | Simple 'GHC.Generics'-based 'arbitrary' generators.
+-- | Simple "GHC.Generics"-based 'arbitrary' generators.
 --
 -- Here is an example. Define your type.
 --
 -- @
 -- data Tree a = Leaf a | Node (Tree a) (Tree a)
---   deriving Generic
+--   deriving 'Generic'
 -- @
 --
 -- Pick an 'arbitrary' implementation.
@@ -63,8 +63,8 @@
 -- This will type-check.
 --
 -- @
--- 'weighted' ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
--- 'weighted' (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
+-- 'weights' ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
+-- 'weights' (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- This will not: the first requires an order of constructors different from
@@ -72,8 +72,8 @@
 -- of weights.
 --
 -- @
--- 'weighted' ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
--- 'weighted' (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
+-- 'weights' ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
+-- 'weights' (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- == Ensuring termination
@@ -84,33 +84,15 @@
 -- The alternative 'genericArbitrary'' implements a simple strategy to keep
 -- values at reasonable sizes: the size parameter of 'Gen' is divided among the
 -- fields of the chosen constructor. When it reaches zero, the generator
--- selects a finite term whenever it can find any of the given type.  This
--- generally ensures that the number of constructors remains close to the
--- initial size parameter passed to 'Gen'.
---
--- A natural number @n@ determines the maximum /depth/ of terms that can be
--- used to end recursion.
--- It is encoded using @'Z' :: 'Z'@ and @'S' :: n -> 'S' n@.
+-- selects a small term of the given type. This generally ensures that the
+-- number of constructors remains close to the initial size parameter passed to
+-- 'Gen'.
 --
 -- @
--- 'genericArbitrary'' n ('weights' (...))
+-- 'genericArbitrary'' ('weights' (...))
 -- @
 --
--- With @n = 'Z'@, the generator looks for a simple nullary constructor.  If none
--- exist at the current type, as is the case for our @Tree@ type, it carries on
--- as in 'genericArbitrary'.
---
--- @
--- 'genericArbitrary'' 'Z' :: Arbitrary a => 'Weights' (Tree a) -> Gen (Tree a)
--- 'genericArbitrary'' 'Z' ('weights' (x '%' y '%' ())) =
---   frequency
---     [ (x, Leaf \<$\> arbitrary)
---     , (y, scale (\`div\` 2) $ Node \<$\> arbitrary \<*\> arbitrary)
---     -- 2 because Node is 2-ary.
---     ]
--- @
---
--- Here is another example with nullary constructors:
+-- Here is an example with nullary constructors:
 --
 -- @
 -- data Tree' = Leaf1 | Leaf2 | Node3 Tree' Tree' Tree'
@@ -120,11 +102,11 @@
 --   arbitrary = 'genericArbitrary'' 'Z' ('weights' (1 '%' 2 '%' 3 '%' ()))
 -- @
 --
--- Here, @'genericArbitrary'' 'Z'@ is equivalent to:
+-- Here, 'genericArbitrary'' is equivalent to:
 --
 -- @
--- 'genericArbitrary'' 'Z' :: 'Weights' Tree' -> Gen Tree'
--- 'genericArbitrary'' 'Z' ('weights' (x '%' y '%' z '%' ())) =
+-- 'genericArbitrary'' :: 'Weights' Tree' -> Gen Tree'
+-- 'genericArbitrary'' ('weights' (x '%' y '%' z '%' ())) =
 --   sized $ \n ->
 --     if n == 0 then
 --       -- If the size parameter is zero, the non-nullary alternative is discarded.
@@ -142,17 +124,12 @@
 --     node = Node3 \<$\> arbitrary \<*\> arbitrary \<*\> arbitrary
 -- @
 --
--- To increase the chances of termination when no nullary constructor is directly
--- available, such as in @Tree@, we can pass a larger depth @n@. The effectiveness
--- of this parameter depends on the concrete type the generator is used for.
---
--- For instance, if we want to generate a value of type @Tree ()@, there is a
--- value of depth 1 (represented by @'S' 'Z'@) that we can use to end
--- recursion: @Leaf ()@.
+-- If we want to generate a value of type @Tree ()@, there is a
+-- value of depth 1 that we can use to end recursion: @Leaf ()@.
 --
 -- @
--- 'genericArbitrary'' ('S' 'Z') :: 'Weights' (Tree ()) -> Gen (Tree ())
--- 'genericArbitrary'' ('S' 'Z') ('weights' (x '%' y '%' ())) =
+-- 'genericArbitrary'' :: 'Weights' (Tree ()) -> Gen (Tree ())
+-- 'genericArbitrary'' ('weights' (x '%' y '%' ())) =
 --   sized $ \n ->
 --     if n == 0 then
 --       return (Leaf ())
@@ -170,16 +147,9 @@
 -- @UndecidableInstances@ is also required.
 --
 -- @
--- instance (Arbitrary a, Generic a, 'ListBaseCases' 'Z' (Rep a))
+-- instance (Arbitrary a, BaseCase (Tree a))
 --   => Arbitrary (Tree a) where
---   arbitrary = 'genericArbitrary'' ('S' 'Z') ('weights' (1 '%' 2 '%' ()))
--- @
---
--- A synonym is provided for brevity.
---
--- @
--- instance (Arbitrary a, 'BaseCases'' Z a) => Arbitrary (Tree a) where
---   arbitrary = 'genericArbitrary'' ('S' 'Z') ('weights' (1 '%' 2 '%' ()))
+--   arbitrary = 'genericArbitrary'' ('weights' (1 '%' 2 '%' ()))
 -- @
 
 
