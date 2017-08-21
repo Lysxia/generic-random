@@ -155,7 +155,8 @@ type family IsJust (b :: Maybe t) :: Bool
 type instance IsJust ('Just t) = 'True
 type instance IsJust 'Nothing = 'False
 
-class Alternative (IfM (GFound f z) Weighted Proxy) => GBCS (f :: k -> *) (z :: Nat) (e :: *) where
+class Alternative (IfM (GFound f z) Weighted Proxy)
+  => GBCS (f :: k -> *) (z :: Nat) (e :: *) where
   gbcs :: b ~ GFound f z => proxy '(z, e) -> IfM b Weighted Proxy (f p)
 
 instance GBCS f z e => GBCS (M1 i c f) z e where
@@ -176,7 +177,8 @@ instance (GBCS f z e, GFound f z ~ 'Just m) => GBCSSum f g z e ('Just m) 'Nothin
 instance (GBCS g z e, GFound g z ~ 'Just n) => GBCSSum f g z e 'Nothing ('Just n) where
   gbcsSum _ = (fmap . fmap) R1 gbcs
 
-instance GBCSSumCompare f g z e m n (CmpNat m n) => GBCSSum f g z e ('Just m) ('Just n) where
+instance GBCSSumCompare f g z e m n (CmpNat m n)
+  => GBCSSum f g z e ('Just m) ('Just n) where
   gbcsSum = gbcsSumCompare (Proxy :: Proxy (CmpNat m n))
 
 class GBCSSumCompare f g z e m n o where
@@ -213,7 +215,12 @@ instance {-# OVERLAPPABLE #-}
   , Alternative (IfM b Weighted Proxy)
   , IsMaybe b
   ) => GBCS (K1 i c) z e where
-  gbcs _ = fmap K1 (ifMmap (Proxy :: Proxy b) liftGen (id :: Proxy c -> Proxy c) (baseCaseSearch (Proxy :: Proxy '(z - 1, e))))
+  gbcs _ =
+    fmap K1
+      (ifMmap (Proxy :: Proxy b)
+        liftGen
+        (id :: Proxy c -> Proxy c)
+        (baseCaseSearch (Proxy :: Proxy '(z - 1, e))))
 
 instance GBCS (K1 i c) 0 e where
   gbcs = const empty
@@ -231,8 +238,10 @@ instance (Generic a, GBCS (Rep a) z e, GFound (Rep a) z ~ 'Just m)
   => GBaseCaseSearch' a z e ('Just m) where
   gbcs' = const (fmap (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g) gbcs)
 
-class (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound (Rep a) z)) => GBaseCaseSearch a z e
-instance (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound (Rep a) z)) => GBaseCaseSearch a z e
+class (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound (Rep a) z))
+  => GBaseCaseSearch a z e
+instance (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound (Rep a) z))
+  => GBaseCaseSearch a z e
 
 genericBCS
   :: forall z a e proxy
