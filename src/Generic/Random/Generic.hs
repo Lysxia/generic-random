@@ -202,9 +202,11 @@ module Generic.Random.Generic
     -- * Base cases for recursive types
   , BaseCase
   , baseCase
+  , Found, GFound'
   , BaseCaseSearch()
   , GBaseCaseSearch()
   , genericBCS
   ) where
 
+import Generic.Random.Internal.BaseCase
 import Generic.Random.Internal.Generic

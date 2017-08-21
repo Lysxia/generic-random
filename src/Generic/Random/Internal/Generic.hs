@@ -1,14 +1,10 @@
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -44,22 +40,6 @@ genericArbitraryU
   => Gen a
 genericArbitraryU = genericArbitrary uniform
 
--- | Decrease size to ensure termination for
--- recursive types, looking for base cases once the size reaches 0.
-genericArbitrary'
-  :: forall a
-  . (Generic a, GA Sized (Rep a), BaseCase a)
-  => Weights a  -- ^ List of weights for every constructor
-  -> Gen a
-genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
-
--- | Shorthand for @\n -> 'genericArbitrary'' n 'uniform'@.
-genericArbitraryU'
-  :: forall a
-  . (Generic a, GA Sized (Rep a), BaseCase a, UniformWeight (Weights_ (Rep a)))
-  => Gen a
-genericArbitraryU' = genericArbitrary' uniform
-
 -- | Decrease size at every recursive call, but don't do anything different
 -- at size 0.
 genericArbitraryRec
@@ -69,13 +49,6 @@ genericArbitraryRec
   -> Gen a
 genericArbitraryRec (Weights w n) =
   fmap to (ga (Proxy :: Proxy Sized) w n :: Gen (Rep a p))
-
-withBaseCase
-  :: Gen a  -- ^ Default generator
-  -> Gen a  -- ^ Base case
-  -> Gen a
-withBaseCase def bc = sized $ \sz ->
-  if sz > 0 then def else bc
 
 -- * Internal
 
@@ -261,109 +234,3 @@ instance Alternative Weighted where
 liftGen :: Gen a -> Weighted a
 liftGen g = Weighted (Just (\_ -> g, 1))
 
-class BaseCaseSearch (n :: Nat) a where
-  type Found n a :: Bool
-  type Found n a = GFound n (Rep a)
-
-  baseCaseSearch :: b ~ Found n a => proxy n -> If b Gen Proxy a
-
-  default baseCaseSearch
-    :: (Generic a, GBaseCaseSearch' n a b, b ~ GFound n (Rep a))
-    => proxy n -> If b Gen Proxy a
-  baseCaseSearch = genericBCS
-
-instance BaseCaseSearch n Int where
-  type Found n Int = 'True
-  baseCaseSearch = const arbitrary
-
-type family If (b :: Bool) (c :: k) (d :: k) :: k
-type instance If 'True c d = c
-type instance If 'False c d = d
-
-type family GFound (n :: Nat) (f :: k -> *) :: Bool
-type instance GFound n (M1 i c f) = GFound n f
-type instance GFound n (f :+: g) = GFound n f || GFound n g
-type instance GFound n (f :*: g) = GFound n f && GFound n g
-type instance GFound n (K1 i c) = GNotFoundIfZ (n == 0) n c
-type instance GFound n U1 = 'True
-
-type (==) m n = IsEQ (CmpNat m n)
-
-type family IsEQ (e :: Ordering) :: Bool
-type instance IsEQ 'EQ = 'True
-type instance IsEQ 'GT = 'False
-type instance IsEQ 'LT = 'False
-
-type family GNotFoundIfZ (b :: Bool) (n :: Nat) c :: Bool
-type instance GNotFoundIfZ 'True n c = 'False
-type instance GNotFoundIfZ 'False n c = Found n c
-
-type family (||) (b :: Bool) (c :: Bool) :: Bool
-type instance 'True  || c = 'True
-type instance 'False || c = c
-
-type family (&&) (b :: Bool) (c :: Bool) :: Bool
-type instance 'True  && c = c
-type instance 'False && c = 'False
-
-class GBCS n f where
-  gbcs :: proxy n -> Weighted (f p)
-
-instance GBCS n f => GBCS n (M1 i c f) where
-  gbcs = (fmap . fmap) M1 gbcs
-
-instance (GBCS n f, GBCS n g) => GBCS n (f :+: g) where
-  gbcs = liftA2 (\f g -> fmap L1 f <|> fmap R1 g) gbcs gbcs
-
-instance (GBCS n f, GBCS n g) => GBCS n (f :*: g) where
-  gbcs = (liftA2 . liftA2) (:*:) gbcs gbcs
-
-instance {-# OVERLAPPABLE #-}
-  (BaseCaseSearch (n - 1) c, Found (n - 1) c ~ 'True)
-  => GBCS n (K1 i c) where
-  gbcs _ = liftGen (fmap K1 (baseCaseSearch (Proxy :: Proxy (n - 1))))
-
-instance GBCS 0 (K1 i c) where
-  gbcs = const empty
-
-instance GBCS n U1 where
-  gbcs = const (pure U1)
-
-class GBaseCaseSearch' n a b where
-  gbcs' :: proxy b -> proxy2 n -> If b Gen Proxy a
-
-instance GBaseCaseSearch' n a 'False where
-  gbcs' = const (const Proxy)
-
-instance (Generic a, GBCS n (Rep a)) => GBaseCaseSearch' n a 'True where
-  gbcs' = const (fmap (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g) gbcs)
-
-class GBaseCaseSearch' n a (GFound n (Rep a)) => GBaseCaseSearch n a
-instance GBaseCaseSearch' n a (GFound n (Rep a)) => GBaseCaseSearch n a
-
-genericBCS
-  :: forall a n proxy
-  . (Generic a, GBaseCaseSearch n a)
-  => proxy n -> (If (GFound n (Rep a)) Gen Proxy a)
-genericBCS = gbcs' (Proxy :: Proxy (GFound n (Rep a)))
-
-class Found n a ~ b => BaseCaseSearching_ n a b where
-  baseCaseSearching_ :: proxy b -> proxy2 n -> (Gen a)
-
-instance (Found n a ~ 'True, BaseCaseSearch n a) => BaseCaseSearching_ n a 'True where
-  baseCaseSearching_ _ = baseCaseSearch
-
-instance (Found n a ~ 'False, BaseCaseSearching (n + 1) a) => BaseCaseSearching_ n a 'False where
-  baseCaseSearching_ _ _ = baseCaseSearching (Proxy :: Proxy (n + 1))
-
-class BaseCaseSearching_ n a (Found n a) => BaseCaseSearching n a
-instance (BaseCaseSearch n a, BaseCaseSearching_ n a (Found n a)) => BaseCaseSearching n a
-
-class BaseCaseSearching 0 a => BaseCase a
-instance BaseCaseSearching 0 a => BaseCase a
-
-baseCaseSearching :: forall n a proxy. BaseCaseSearching n a => proxy n -> (Gen a)
-baseCaseSearching = baseCaseSearching_ (Proxy :: Proxy (Found n a))
-
-baseCase :: forall a. BaseCase a => Gen a
-baseCase = baseCaseSearching (Proxy :: Proxy 0)

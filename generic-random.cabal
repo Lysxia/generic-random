@@ -18,6 +18,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Generic.Random.Generic
+    Generic.Random.Internal.BaseCase
     Generic.Random.Internal.Generic
   build-depends:
     base >= 4.7 && < 4.11,
