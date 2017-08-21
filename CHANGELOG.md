@@ -1,11 +1,19 @@
+https://github.com/Lysxia/generic-random/blob/master/changelog.md
+
 # 0.6.0.0
 
-- Add genericArbitraryU'
+- Rework generic base case generation
+  + You can explicitly provide a trivial generator (e.g., returning a
+    nullary constructor) using `withBaseCase`
+  + Generically derive `BaseCaseSearch` and let `BaseCase` find small
+    values, no depth parameter must be specified anymore
+- Add `genericArbitraryRec`, `genericArbitraryU'`
+- Fixed bug with `genericArbitrary'` not dividing the size parameter
 
 # 0.5.0.0
 
 - Turn off dependency on boltzmann-samplers by default
-- Add genericArbitraryU, genericArbitraryU0 and genericArbitraryU1
+- Add `genericArbitraryU`, `genericArbitraryU0` and `genericArbitraryU1`
 - Compatible with GHC 7.8.4 and GHC 7.10.3
 
 # 0.4.1.0
@@ -21,5 +29,5 @@
 # 0.3.0.0
 
 - Support GHC 7.10.3
-- Replace TypeApplications with ad-hoc data types in
-  genericArbitraryFrequency'/genericArbitrary'
+- Replace `TypeApplications` with ad-hoc data types in
+  `genericArbitraryFrequency'`/`genericArbitrary'`
