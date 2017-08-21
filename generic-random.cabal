@@ -29,3 +29,12 @@ library
 source-repository head
   type:     git
   location: https://github.com/lysxia/generic-random
+
+test-suite unit
+  Hs-source-dirs:  test
+  Main-is:         Unit.hs
+  Build-depends:
+      base,
+      QuickCheck,
+      generic-random
+  Type: exitcode-stdio-1.0
