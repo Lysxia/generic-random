@@ -6,15 +6,15 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
 ```haskell
     {-# LANGUAGE DeriveGeneric #-}
 
-    import GHC.Generics ( Generic )
+    import GHC.Generics (Generic)
     import Test.QuickCheck
-    import Generic.Random.Generic
+    import Generic.Random
 
     data Tree a = Leaf | Node (Tree a) a (Tree a)
       deriving (Show, Generic)
 
     instance Arbitrary a => Arbitrary (Tree a) where
-      arbitrary = genericArbitrary' Z uniform
+      arbitrary = genericArbitraryRec uniform `withBaseCase` return Leaf
 
     -- Equivalent to
     -- > arbitrary =
@@ -24,7 +24,8 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
     -- >     else
     -- >       oneof
     -- >         [ return Leaf
-    -- >         , Node <$> arbitrary <*> arbitrary <*> arbitrary
+    -- >         , resize (n `div` 3) $
+    -- >             Node <$> arbitrary <*> arbitrary <*> arbitrary
     -- >         ]
 
     main = sample (arbitrary :: Gen (Tree ()))
@@ -34,4 +35,4 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
   weights have been specified for all constructors.
 - A simple (optional) strategy to ensure termination: `Test.QuickCheck.Gen`'s
   size parameter decreases at every recursive `genericArbitrary'` call; when it
-  reaches zero, sample directly from a finite set of finite values.
+  reaches zero, sample directly from a trivially terminating generator.
