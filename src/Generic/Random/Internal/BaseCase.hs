@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -9,11 +10,19 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+#if __GLASGOW_HASKELL__ < 710
+{-# LANGUAGE OverlappingInstances #-}
+#endif
 
 module Generic.Random.Internal.BaseCase where
 
 import Control.Applicative
+#if __GLASGOW_HASKELL__ >= 800
 import Data.Proxy
+#endif
+#if __GLASGOW_HASKELL__ < 710
+import Data.Word
+#endif
 import GHC.Generics
 import GHC.TypeLits
 import Test.QuickCheck
@@ -101,7 +110,7 @@ type instance Found Ordering z = 'Just 0
 instance BaseCaseSearch Ordering z e where
   baseCaseSearch _ = arbitrary
 
-
+#if __GLASGOW_HASKELL__ >= 800
 instance {-# INCOHERENT #-}
   ( TypeError
       (     'Text "Could not find instance for ("
@@ -118,6 +127,7 @@ instance {-# INCOHERENT #-}
     )
   ) => BaseCaseSearch a z e where
   baseCaseSearch = error "Type error"
+#endif
 
 class Found a z ~ b => BaseCaseSearching_ a z b where
   baseCaseSearching_ :: proxy b -> proxy2 '(z, a) -> (Gen a)
@@ -230,7 +240,7 @@ instance GBCSProduct f g z e (GFound' f z) (GFound' g z) => GBCS (f :*: g) z e w
 class Alternative (IfM (b &&? c) Weighted Proxy) => GBCSProduct f g z e b c where
   gbcsProduct :: proxy0 '(b, c) -> proxy '(z, e) -> IfM (b &&? c) Weighted Proxy ((f :*: g) p)
 
-instance {-# OVERLAPPABLE #-} (b &&? c ~ 'Nothing) => GBCSProduct f g z e b c where
+instance {-# OVERLAPPABLE #-} ((b &&? c) ~ 'Nothing) => GBCSProduct f g z e b c where
   gbcsProduct _ = const Proxy
 
 instance (GBCS f z e, GBCS g z e, GFound' f z ~ 'Just m, GFound' g z ~ 'Just n)
@@ -286,3 +296,18 @@ gBaseCaseSearch
   . GBaseCaseSearch a z e
   => proxy '(z, e) -> (IfM (GFound' (Rep a) z) Gen Proxy a)
 gBaseCaseSearch = gbcs' (Proxy :: Proxy (GFound' (Rep a) z))
+
+#if __GLASGOW_HASKELL__ < 800
+data Proxy a = Proxy
+
+instance Functor Proxy where
+  fmap _ _ = Proxy
+
+instance Applicative Proxy where
+  pure _ = Proxy
+  _ <*> _ = Proxy
+
+instance Alternative Proxy where
+  empty = Proxy
+  _ <|> _ = Proxy
+#endif

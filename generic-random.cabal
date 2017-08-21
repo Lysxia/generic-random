@@ -39,3 +39,4 @@ test-suite unit
       QuickCheck,
       generic-random
   Type: exitcode-stdio-1.0
+  Default-language: Haskell2010
