@@ -200,6 +200,7 @@ module Generic.Random.Generic
   , uniform
 
     -- * Base cases for recursive types
+  , withBaseCase
   , BaseCase
   , baseCase
   , Found, GFound
