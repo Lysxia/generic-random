@@ -104,14 +104,14 @@ instance (Found a z ~ 'Nothing, BaseCaseSearching a (z + 1)) => BaseCaseSearchin
 class BaseCaseSearching_ a z (Found a z) => BaseCaseSearching a z
 instance (BaseCaseSearch a z a, BaseCaseSearching_ a z (Found a z)) => BaseCaseSearching a z
 
-class BaseCaseSearching a 0 => BaseCase a
-instance BaseCaseSearching a 0 => BaseCase a
-
 baseCaseSearching :: forall z a proxy. BaseCaseSearching a z => proxy '(z, a) -> (Gen a)
 baseCaseSearching = baseCaseSearching_ (Proxy :: Proxy (Found a z))
 
-baseCase :: forall a. BaseCase a => Gen a
-baseCase = baseCaseSearching (Proxy :: Proxy '(0, a))
+class BaseCase a where
+  baseCase :: Gen a
+
+instance {-# OVERLAPPABLE #-} BaseCaseSearching a 0 => BaseCase a where
+  baseCase = baseCaseSearching (Proxy :: Proxy '(0, a))
 
 
 type family IfM (b :: Maybe t) (c :: k) (d :: k) :: k
