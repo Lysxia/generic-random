@@ -32,28 +32,38 @@ import Generic.Random.Internal.Generic
 
 -- | Decrease size to ensure termination for
 -- recursive types, looking for base cases once the size reaches 0.
+--
+-- > genericArbitrary' (17 % 19 % 23 % ()) :: Gen a
 genericArbitrary'
-  :: forall a
-  . (Generic a, GA Sized (Rep a), BaseCase a)
+  :: (Generic a, GA Sized (Rep a), BaseCase a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 
--- | Shorthand for @'genericArbitrary'' 'uniform'@.
+-- | Equivalent to @'genericArbitrary'' 'uniform'@.
+--
+-- > genericArbitraryU :: Gen a
 genericArbitraryU'
-  :: forall a
-  . (Generic a, GA Sized (Rep a), BaseCase a, UniformWeight (Weights_ (Rep a)))
+  :: (Generic a, GA Sized (Rep a), BaseCase a, UniformWeight_ (Rep a))
   => Gen a
 genericArbitraryU' = genericArbitrary' uniform
 
-withBaseCase
-  :: Gen a  -- ^ Default generator
-  -> Gen a  -- ^ Base case
-  -> Gen a
+-- | Run the first generator if the size is positive.
+-- Run the second if the size is zero.
+--
+-- > defaultGen `withBaseCase` baseCaseGen
+withBaseCase :: Gen a -> Gen a -> Gen a
 withBaseCase def bc = sized $ \sz ->
   if sz > 0 then def else bc
 
 
+-- | Find a base case of type @a@ with maximum depth @z@,
+-- recursively using 'BaseCaseSearch' instances to search deeper levels.
+--
+-- @y@ is the depth of a base case, if found.
+--
+-- @e@ is the original type the search started with, that @a@ appears in.
+-- It is used for error reporting.
 class BaseCaseSearch (a :: *) (z :: Nat) (y :: Maybe Nat) (e :: *) where
   baseCaseSearch :: prox y -> proxy '(z, e) -> IfM y Gen Proxy a
 
@@ -104,6 +114,7 @@ instance BaseCaseSearching_ a z ('Just m) where
 instance BaseCaseSearching a (z + 1) => BaseCaseSearching_ a z 'Nothing where
   baseCaseSearching_ _ _ _ = baseCaseSearching (Proxy :: Proxy '(z + 1, a))
 
+-- | Progressively increase the depth bound for 'BaseCaseSearch'.
 class BaseCaseSearching a z where
   baseCaseSearching :: proxy '(z, a) -> Gen a
 
@@ -112,9 +123,12 @@ instance (BaseCaseSearch a z y a, BaseCaseSearching_ a z y) => BaseCaseSearching
     where
       y = Proxy :: Proxy y
 
+-- | Custom instances can override the default behavior.
 class BaseCase a where
+  -- | Generator of base cases.
   baseCase :: Gen a
 
+-- | Overlappable
 instance {-# OVERLAPPABLE #-} BaseCaseSearching a 0 => BaseCase a where
   baseCase = baseCaseSearching (Proxy :: Proxy '(0, a))
 

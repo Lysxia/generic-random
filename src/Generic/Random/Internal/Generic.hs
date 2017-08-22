@@ -28,22 +28,33 @@ import Test.QuickCheck
 -- * Random generators
 
 -- | Pick a constructor with a given distribution, and fill its fields
--- recursively.
+-- with recursive calls to 'arbitrary'.
+--
+-- === Example
+--
+-- > genericArbitrary (2 % 3 % 5 % ()) :: Gen a
+--
+-- Picks the first constructor with probability @2/10@,
+-- the second with probability @3/10@, the third with probability @5/10@.
 genericArbitrary
-  :: forall a
-  .  (Generic a, GA Unsized (Rep a))
+  :: (Generic a, GA Unsized (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary (Weights w n) = fmap to (ga (Proxy :: Proxy Unsized) w n)
 
--- | Shorthand for @'genericArbitrary' 'uniform'@.
+-- | Pick every constructor with equal probability.
+-- Equivalent to @'genericArbitrary' 'uniform'@.
+--
+-- > genericArbitraryU :: Gen a
 genericArbitraryU
-  :: forall a
-  .  (Generic a, GA Unsized (Rep a), UniformWeight (Weights_ (Rep a)))
+  :: (Generic a, GA Unsized (Rep a), UniformWeight_ (Rep a))
   => Gen a
 genericArbitraryU = genericArbitrary uniform
 
--- | 'Arbitrary' for types with one constructor.
+-- | 'arbitrary' for types with one constructor.
+-- Equivalent to 'genericArbitraryU', with a stricter type.
+--
+-- > genericArbitrarySingle :: Gen a
 genericArbitrarySingle
   :: (Generic a, GA Unsized (Rep a), Weights_ (Rep a) ~ L c0)
   => Gen a
@@ -51,6 +62,8 @@ genericArbitrarySingle = genericArbitraryU
 
 -- | Decrease size at every recursive call, but don't do anything different
 -- at size 0.
+--
+-- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
 genericArbitraryRec
   :: forall a
   . (Generic a, GA Sized (Rep a))
@@ -104,7 +117,7 @@ weights :: (Weights_ (Rep a), Int, ()) -> Weights a
 weights (w, n, ()) = Weights w n
 
 -- | Uniform distribution.
-uniform :: UniformWeight (Weights_ (Rep a)) => Weights a
+uniform :: UniformWeight_ (Rep a) => Weights a
 uniform =
   let (w, n) = uniformWeight
   in Weights w n
@@ -169,6 +182,9 @@ instance UniformWeight (L c) where
 
 instance UniformWeight () where
   uniformWeight = ((), 1)
+
+class UniformWeight (Weights_ f) => UniformWeight_ f
+instance UniformWeight (Weights_ f) => UniformWeight_ f
 
 data Sized
 data Unsized
