@@ -6,6 +6,8 @@ cabal-version: >=1.10
 executable generic-example
   main-is: generic.hs
   ghc-options: -Wall
+  if impl(ghc < 7.10)
+    ghc-options: -fcontext-stack=30
   build-depends:
     base,
     QuickCheck,
