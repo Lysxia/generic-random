@@ -7,7 +7,8 @@ https://github.com/Lysxia/generic-random/blob/master/changelog.md
     nullary constructor) using `withBaseCase`
   + Generically derive `BaseCaseSearch` and let `BaseCase` find small
     values, no depth parameter must be specified anymore
-- Add `genericArbitraryRec`, `genericArbitraryU'`
+- Add `genericArbitrarySingle`, `genericArbitraryRec`, `genericArbitraryU'`
+- Deprecate `weights`
 - Fixed bug with `genericArbitrary'` not dividing the size parameter
 
 # 0.5.0.0
