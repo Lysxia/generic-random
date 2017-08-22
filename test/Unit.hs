@@ -19,9 +19,6 @@ newtype T a = W a deriving (Generic, Show)
 instance (Arbitrary a, BaseCase (T a)) => Arbitrary (T a) where
   arbitrary = genericArbitrary' uniform
 
-type instance Found (T a) z = GFound (T a) z
-instance GBaseCaseSearch (T a) z e => BaseCaseSearch (T a) z e
-
 f :: Gen (T (T Int))
 f = arbitrary
 

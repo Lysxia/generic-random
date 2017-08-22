@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -52,97 +53,64 @@ withBaseCase
 withBaseCase def bc = sized $ \sz ->
   if sz > 0 then def else bc
 
-type family Found a (z :: Nat) :: Maybe Nat
-type GFound a z = GFound' (Rep a) z
 
-class BaseCaseSearch (a :: *) (z :: Nat) (e :: *) where
-  baseCaseSearch :: b ~ Found a z => proxy '(z, e) -> IfM b Gen Proxy a
+class BaseCaseSearch (a :: *) (z :: Nat) (y :: Maybe Nat) (e :: *) where
+  baseCaseSearch :: prox y -> proxy '(z, e) -> IfM y Gen Proxy a
 
-  default baseCaseSearch
-    :: (b ~ GFound' (Rep a) z, GBaseCaseSearch a z e)
-    => proxy '(z, e) -> IfM b Gen Proxy a
+
+instance {-# OVERLAPPABLE #-} GBaseCaseSearch a z y e => BaseCaseSearch a z y e where
   baseCaseSearch = gBaseCaseSearch
 
 
-type instance Found Char z = 'Just 0
-instance BaseCaseSearch Char z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Char z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Int z = 'Just 0
-instance BaseCaseSearch Int z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Int z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Integer z = 'Just 0
-instance BaseCaseSearch Integer z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Integer z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Float z = 'Just 0
-instance BaseCaseSearch Float z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Float z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Double z = 'Just 0
-instance BaseCaseSearch Double z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Double z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Word z = 'Just 0
-instance BaseCaseSearch Word z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Word z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found () z = 'Just 0
-instance BaseCaseSearch () z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch () z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found Bool z = 'Just 0
-instance BaseCaseSearch Bool z e where
-  baseCaseSearch _ = arbitrary
+instance (y ~ 'Just 0) => BaseCaseSearch Bool z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found [a] z = 'Just 0
-instance BaseCaseSearch [a] z e where
-  baseCaseSearch _ = return []
+instance (y ~ 'Just 0) => BaseCaseSearch [a] z y e where
+  baseCaseSearch _ _ = return []
 
-type instance Found (Either a b) z = Found' a z ||? Found' b z
-instance GBaseCaseSearch (Either a b) z e => BaseCaseSearch (Either a b) z e where
+instance (y ~ 'Just 0) => BaseCaseSearch Ordering z y e where
+  baseCaseSearch _ _ = arbitrary
 
-type instance Found (a, b) z = Found' a z &&? Found' b z
-instance GBaseCaseSearch (a, b) z e => BaseCaseSearch (a, b) z e where
+-- Either and (,) use Generics
 
-type instance Found Ordering z = 'Just 0
-instance BaseCaseSearch Ordering z e where
-  baseCaseSearch _ = arbitrary
 
-#if __GLASGOW_HASKELL__ >= 800
-instance {-# INCOHERENT #-}
-  ( TypeError
-      (     'Text "Could not find instance for ("
-      ':<>: 'ShowType (BaseCaseSearch a z e)
-      ':<>: 'Text ")"
-      ':$$: 'Text "If the type ("
-      ':<>: 'ShowType a
-      ':<>: 'Text ") is a type variable,"
-      ':$$: 'Text "    you may be missing a (BaseCase ("
-      ':<>: 'ShowType (BaseCase e)
-      ':<>: 'Text ") constraint"
-      ':$$: 'Text "Otherwise, if it starts with a type constructor,"
-      ':$$: 'Text "    you may need to add an instance of BaseCaseSearch for it"
-    )
-  ) => BaseCaseSearch a z e where
-  baseCaseSearch = error "Type error"
-#endif
+class BaseCaseSearching_ a z y where
+  baseCaseSearching_ :: proxy y -> proxy2 '(z, a) -> IfM y Gen Proxy a -> Gen a
 
-class Found a z ~ b => BaseCaseSearching_ a z b where
-  baseCaseSearching_ :: proxy b -> proxy2 '(z, a) -> (Gen a)
+instance BaseCaseSearching_ a z ('Just m) where
+  baseCaseSearching_ _ _ = id
 
-instance (Found a z ~ 'Just m, BaseCaseSearch a z a) => BaseCaseSearching_ a z ('Just m) where
-  baseCaseSearching_ _ = baseCaseSearch
+instance BaseCaseSearching a (z + 1) => BaseCaseSearching_ a z 'Nothing where
+  baseCaseSearching_ _ _ _ = baseCaseSearching (Proxy :: Proxy '(z + 1, a))
 
-instance (Found a z ~ 'Nothing, BaseCaseSearching a (z + 1)) => BaseCaseSearching_ a z 'Nothing where
-  baseCaseSearching_ _ _ = baseCaseSearching (Proxy :: Proxy '(z + 1, a))
+class BaseCaseSearching a z where
+  baseCaseSearching :: proxy '(z, a) -> Gen a
 
-class BaseCaseSearching_ a z (Found a z) => BaseCaseSearching a z
-instance (BaseCaseSearch a z a, BaseCaseSearching_ a z (Found a z)) => BaseCaseSearching a z
-
-baseCaseSearching :: forall z a proxy. BaseCaseSearching a z => proxy '(z, a) -> (Gen a)
-baseCaseSearching = baseCaseSearching_ (Proxy :: Proxy (Found a z))
+instance (BaseCaseSearch a z y a, BaseCaseSearching_ a z y) => BaseCaseSearching a z where
+  baseCaseSearching z = baseCaseSearching_ y z (baseCaseSearch y z)
+    where
+      y = Proxy :: Proxy y
 
 class BaseCase a where
   baseCase :: Gen a
@@ -154,19 +122,6 @@ instance {-# OVERLAPPABLE #-} BaseCaseSearching a 0 => BaseCase a where
 type family IfM (b :: Maybe t) (c :: k) (d :: k) :: k
 type instance IfM ('Just t) c d = c
 type instance IfM 'Nothing c d = d
-
-type Found' a z = NotFoundIfZ (z == 0) a z
-
-type family NotFoundIfZ (b :: Bool) (c :: *) (z :: Nat) :: Maybe Nat
-type instance NotFoundIfZ 'True c z = 'Nothing
-type instance NotFoundIfZ 'False c z = Found c (z - 1)
-
-type family GFound' (f :: k -> *) (z :: Nat) :: Maybe Nat
-type instance GFound' (M1 i c f) z = GFound' f z
-type instance GFound' (f :+: g) z = GFound' f z ||? GFound' g z
-type instance GFound' (f :*: g) z = GFound' f z &&? GFound' g z
-type instance GFound' (K1 i a) z = Found' a z
-type instance GFound' U1 z = 'Just 0
 
 type (==) m n = IsEQ (CmpNat m n)
 
@@ -199,103 +154,141 @@ type instance MinOf 'GT m n = n
 type instance MinOf 'EQ m n = n
 type instance MinOf 'LT m n = m
 
-type family IsJust (b :: Maybe t) :: Bool
-type instance IsJust ('Just t) = 'True
-type instance IsJust 'Nothing = 'False
+class Alternative (IfM y Weighted Proxy)
+  => GBCS (f :: k -> *) (z :: Nat) (y :: Maybe Nat) (e :: *) where
+  gbcs :: prox y -> proxy '(z, e) -> IfM y Weighted Proxy (f p)
 
-class Alternative (IfM (GFound' f z) Weighted Proxy)
-  => GBCS (f :: k -> *) (z :: Nat) (e :: *) where
-  gbcs :: b ~ GFound' f z => proxy '(z, e) -> IfM b Weighted Proxy (f p)
+instance GBCS f z y e => GBCS (M1 i c f) z y e where
+  gbcs y z = fmap M1 (gbcs y z)
 
-instance GBCS f z e => GBCS (M1 i c f) z e where
-  gbcs = (fmap . fmap) M1 gbcs
+instance
+  ( GBCSSum f g z e yf yg
+  , GBCS f z yf e
+  , GBCS g z yg e
+  , y ~ (yf ||? yg)
+  ) => GBCS (f :+: g) z y e where
+  gbcs _ z = gbcsSum (Proxy :: Proxy '(yf, yg)) z
+    (gbcs (Proxy :: Proxy yf) z)
+    (gbcs (Proxy :: Proxy yg) z)
 
-instance GBCSSum f g z e (GFound' f z) (GFound' g z) => GBCS (f :+: g) z e where
-  gbcs = gbcsSum (Proxy :: Proxy '(GFound' f z, GFound' g z))
-
-class Alternative (IfM (b ||? c) Weighted Proxy) => GBCSSum f g z e b c where
-  gbcsSum :: proxy0 '(b, c) -> proxy '(z, e) -> IfM (b ||? c) Weighted Proxy ((f :+: g) p)
+class Alternative (IfM (yf ||? yg) Weighted Proxy) => GBCSSum f g z e yf yg where
+  gbcsSum
+    :: prox '(yf, yg)
+    -> proxy '(z, e)
+    -> IfM yf Weighted Proxy (f p)
+    -> IfM yg Weighted Proxy (g p)
+    -> IfM (yf ||? yg) Weighted Proxy ((f :+: g) p)
 
 instance GBCSSum f g z e 'Nothing 'Nothing where
-  gbcsSum _ = const Proxy
+  gbcsSum _ _ _ _ = Proxy
 
-instance (GBCS f z e, GFound' f z ~ 'Just m) => GBCSSum f g z e ('Just m) 'Nothing where
-  gbcsSum _ = (fmap . fmap) L1 gbcs
+instance GBCSSum f g z e ('Just m) 'Nothing where
+  gbcsSum _ _ f _ = fmap L1 f
 
-instance (GBCS g z e, GFound' g z ~ 'Just n) => GBCSSum f g z e 'Nothing ('Just n) where
-  gbcsSum _ = (fmap . fmap) R1 gbcs
+instance GBCSSum f g z e 'Nothing ('Just n) where
+  gbcsSum _ _ _ g = fmap R1 g
 
-instance GBCSSumCompare f g z e m n (CmpNat m n)
+instance GBCSSumCompare f g z e (CmpNat m n)
   => GBCSSum f g z e ('Just m) ('Just n) where
-  gbcsSum = gbcsSumCompare (Proxy :: Proxy (CmpNat m n))
+  gbcsSum _ = gbcsSumCompare (Proxy :: Proxy (CmpNat m n))
 
-class GBCSSumCompare f g z e m n o where
+class GBCSSumCompare f g z e o where
   gbcsSumCompare
-    :: proxy1 o -> proxy0 '( 'Just m, 'Just n) -> proxy '(z, e)
-    -> IfM ('Just (MinOf o m n)) Weighted Proxy ((f :+: g) p)
+    :: proxy0 o
+    -> proxy '(z, e)
+    -> Weighted (f p)
+    -> Weighted (g p)
+    -> Weighted ((f :+: g) p)
 
-instance GBCSProduct f g z e (GFound' f z) (GFound' g z) => GBCS (f :*: g) z e where
-  gbcs = gbcsProduct (Proxy :: Proxy '(GFound' f z, GFound' g z))
+instance GBCSSumCompare f g z e 'EQ where
+  gbcsSumCompare _ _ f g = fmap L1 f <|> fmap R1 g
 
-class Alternative (IfM (b &&? c) Weighted Proxy) => GBCSProduct f g z e b c where
-  gbcsProduct :: proxy0 '(b, c) -> proxy '(z, e) -> IfM (b &&? c) Weighted Proxy ((f :*: g) p)
+instance GBCSSumCompare f g z e 'LT where
+  gbcsSumCompare _ _ f _ = fmap L1 f
 
-instance {-# OVERLAPPABLE #-} ((b &&? c) ~ 'Nothing) => GBCSProduct f g z e b c where
-  gbcsProduct _ = const Proxy
+instance GBCSSumCompare f g z e 'GT where
+  gbcsSumCompare _ _ _ g = fmap R1 g
 
-instance (GBCS f z e, GBCS g z e, GFound' f z ~ 'Just m, GFound' g z ~ 'Just n)
-  => GBCSProduct f g z e ('Just m) ('Just n) where
-  gbcsProduct _ = (liftA2 . liftA2) (:*:) gbcs gbcs
+instance
+  ( GBCSProduct f g z e yf yg
+  , GBCS f z yf e
+  , GBCS g z yg e
+  , y ~ (yf &&? yg)
+  ) => GBCS (f :*: g) z y e where
+  gbcs _ z = gbcsProduct (Proxy :: Proxy '(yf, yg)) z
+    (gbcs (Proxy :: Proxy yf) z)
+    (gbcs (Proxy :: Proxy yg) z)
+
+class Alternative (IfM (yf &&? yg) Weighted Proxy) => GBCSProduct f g z e yf yg where
+  gbcsProduct
+    :: prox '(yf, yg)
+    -> proxy '(z, e)
+    -> IfM yf Weighted Proxy (f p)
+    -> IfM yg Weighted Proxy (g p)
+    -> IfM (yf &&? yg) Weighted Proxy ((f :*: g) p)
+
+instance {-# OVERLAPPABLE #-} ((yf &&? yg) ~ 'Nothing) => GBCSProduct f g z e yf yg where
+  gbcsProduct _ _ _ _ = Proxy
+
+instance GBCSProduct f g z e ('Just m) ('Just n) where
+  gbcsProduct _ _ f g = liftA2 (:*:) f g
 
 class IsMaybe b where
   ifMmap :: proxy b -> (c a -> c' a') -> (d a -> d' a') -> IfM b c d a -> IfM b c' d' a'
+  ifM :: proxy b -> c a -> d a -> IfM b c d a
 
 instance IsMaybe ('Just t) where
   ifMmap _ f _ a = f a
+  ifM _ f _ = f
 
 instance IsMaybe 'Nothing where
   ifMmap _ _ g a = g a
+  ifM _ _ g = g
 
 instance {-# OVERLAPPABLE #-}
-  ( BaseCaseSearch c (z - 1) e
-  , b ~ GFound' (K1 i c) z
+  ( BaseCaseSearch c (z - 1) y e
   , (z == 0) ~ 'False
-  , Alternative (IfM b Weighted Proxy)
-  , IsMaybe b
-  ) => GBCS (K1 i c) z e where
-  gbcs _ =
+  , Alternative (IfM y Weighted Proxy)
+  , IsMaybe y
+  ) => GBCS (K1 i c) z y e where
+  gbcs y _ =
     fmap K1
-      (ifMmap (Proxy :: Proxy b)
+      (ifMmap y
         liftGen
         (id :: Proxy c -> Proxy c)
-        (baseCaseSearch (Proxy :: Proxy '(z - 1, e))))
+        (baseCaseSearch y (Proxy :: Proxy '(z - 1, e))))
 
-instance GBCS (K1 i c) 0 e where
-  gbcs = const empty
+instance (y ~ 'Nothing) => GBCS (K1 i c) 0 y e where
+  gbcs _ _ = empty
 
-instance GBCS U1 z e where
-  gbcs = const (pure U1)
+instance (y ~ 'Just 0) => GBCS U1 z y e where
+  gbcs _ _ = pure U1
 
-class GBaseCaseSearch' a z e b where
-  gbcs' :: proxy b -> proxy2 '(z, e) -> IfM b Gen Proxy a
+#if __GLASGOW_HASKELL__ >= 800
+instance {-# INCOHERENT #-}
+  ( TypeError
+      (     'Text "Unrecognized Rep: "
+      ':<>: 'ShowType f
+      ':$$: 'Text "Possible causes:"
+      ':$$: 'Text "    Missing ("
+      ':<>: 'ShowType (BaseCase e)
+      ':<>: 'Text ") constraint"
+      ':$$: 'Text "    Missing Generic instance"
+    )
+  , Alternative (IfM y Weighted Proxy)
+  ) => GBCS f z y e where
+  gbcs = error "Type error"
+#endif
 
-instance GBaseCaseSearch' a z e 'Nothing where
-  gbcs' = const (const Proxy)
+class GBaseCaseSearch a z y e where
+  gBaseCaseSearch :: prox y -> proxy '(z, e) -> IfM y Gen Proxy a
 
-instance (Generic a, GBCS (Rep a) z e, GFound' (Rep a) z ~ 'Just m)
-  => GBaseCaseSearch' a z e ('Just m) where
-  gbcs' = const (fmap (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g) gbcs)
-
-class (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound' (Rep a) z))
-  => GBaseCaseSearch a z e
-instance (Generic a, GBCS (Rep a) z e, GBaseCaseSearch' a z e (GFound' (Rep a) z))
-  => GBaseCaseSearch a z e
-
-gBaseCaseSearch
-  :: forall z a e proxy
-  . GBaseCaseSearch a z e
-  => proxy '(z, e) -> (IfM (GFound' (Rep a) z) Gen Proxy a)
-gBaseCaseSearch = gbcs' (Proxy :: Proxy (GFound' (Rep a) z))
+instance (Generic a, GBCS (Rep a) z y e, IsMaybe y)
+  => GBaseCaseSearch a z y e where
+  gBaseCaseSearch y z = ifMmap y
+    (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g)
+    (\Proxy -> Proxy)
+    (gbcs y z)
 
 #if __GLASGOW_HASKELL__ < 800
 data Proxy a = Proxy
