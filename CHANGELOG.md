@@ -1,7 +1,8 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
-# 0.6.0.0
+# 1.0.0.0
 
+- Make the main module `Generic.Random`
 - Rework generic base case generation
   + You can explicitly provide a trivial generator (e.g., returning a
     nullary constructor) using `withBaseCase`
