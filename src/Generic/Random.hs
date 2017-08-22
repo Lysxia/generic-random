@@ -11,7 +11,7 @@
 --
 -- @
 -- instance Arbitrary a => Arbitrary (Tree a) where
---   arbitrary = 'genericArbitrary' ('weights' (9 '%' 8 '%' ()))
+--   arbitrary = 'genericArbitrary' (9 '%' 8 '%' ())
 -- @
 --
 -- @arbitrary :: 'Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
@@ -20,7 +20,7 @@
 --
 -- == Distribution of constructors
 --
--- The distribution of constructors can be specified using 'weights' applied to
+-- The distribution of constructors can be specified as
 -- a special list of /weights/ in the same order as the data type definition.
 -- This assigns to each constructor a probability proportional to its weight;
 -- in other words, @p_C = weight_C / sumOfWeights@.
@@ -35,7 +35,7 @@
 --
 -- @
 -- 'genericArbitrary' :: Arbitrary a => 'Weights' (Tree a) -> Gen (Tree a)
--- 'genericArbitrary' ('weights' (x '%' y '%' ())) =
+-- 'genericArbitrary' (x '%' y '%' ()) =
 --   frequency
 --     [ (x, Leaf \<$\> arbitrary)
 --     , (y, Node \<$\> arbitrary \<*\> arbitrary)
@@ -63,8 +63,8 @@
 -- This will type-check.
 --
 -- @
--- 'weights' ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
--- 'weights' (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
+-- ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
+-- (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- This will not: the first requires an order of constructors different from
@@ -72,8 +72,8 @@
 -- of weights.
 --
 -- @
--- 'weights' ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
--- 'weights' (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
+-- ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
+-- (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- == Ensuring termination
@@ -89,7 +89,7 @@
 -- 'Gen'.
 --
 -- @
--- 'genericArbitrary'' ('weights' (...))
+-- 'genericArbitrary'' (...)
 -- @
 --
 -- Here is an example with nullary constructors:
@@ -99,14 +99,14 @@
 --   deriving Generic
 --
 -- instance Arbitrary Tree' where
---   arbitrary = 'genericArbitrary'' 'Z' ('weights' (1 '%' 2 '%' 3 '%' ()))
+--   arbitrary = 'genericArbitrary'' (1 '%' 2 '%' 3 '%' ())
 -- @
 --
 -- Here, 'genericArbitrary'' is equivalent to:
 --
 -- @
 -- 'genericArbitrary'' :: 'Weights' Tree' -> Gen Tree'
--- 'genericArbitrary'' ('weights' (x '%' y '%' z '%' ())) =
+-- 'genericArbitrary'' (x '%' y '%' z '%' ()) =
 --   sized $ \n ->
 --     if n == 0 then
 --       -- If the size parameter is zero, the non-nullary alternative is discarded.
@@ -129,7 +129,7 @@
 --
 -- @
 -- 'genericArbitrary'' :: 'Weights' (Tree ()) -> Gen (Tree ())
--- 'genericArbitrary'' ('weights' (x '%' y '%' ())) =
+-- 'genericArbitrary'' (x '%' y '%' ()) =
 --   sized $ \n ->
 --     if n == 0 then
 --       return (Leaf ())
@@ -149,7 +149,7 @@
 -- @
 -- instance (Arbitrary a, BaseCase (Tree a))
 --   => Arbitrary (Tree a) where
---   arbitrary = 'genericArbitrary'' ('weights' (1 '%' 2 '%' ()))
+--   arbitrary = 'genericArbitrary'' (1 '%' 2 '%' ())
 -- @
 
 
@@ -158,14 +158,15 @@ module Generic.Random
     -- * Arbitrary implementations
     genericArbitrary
   , genericArbitraryU
+  , genericArbitrarySingle
   , genericArbitrary'
   , genericArbitraryU'
   , genericArbitraryRec
 
     -- * Specifying finite distributions
   , Weights
-  , W
   , weights
+  , W
   , (%)
   , uniform
 
@@ -173,7 +174,6 @@ module Generic.Random
   , withBaseCase
   , BaseCase
   , baseCase
-  , Found, GFound
   , BaseCaseSearch()
   , GBaseCaseSearch()
   , gBaseCaseSearch

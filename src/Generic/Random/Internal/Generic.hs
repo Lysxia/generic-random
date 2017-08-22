@@ -43,6 +43,12 @@ genericArbitraryU
   => Gen a
 genericArbitraryU = genericArbitrary uniform
 
+-- | 'Arbitrary' for types with one constructor.
+genericArbitrarySingle
+  :: (Generic a, GA Unsized (Rep a), Weights_ (Rep a) ~ L c0)
+  => Gen a
+genericArbitrarySingle = genericArbitraryU
+
 -- | Decrease size at every recursive call, but don't do anything different
 -- at size 0.
 genericArbitraryRec
@@ -61,7 +67,7 @@ type family Weights_ (f :: * -> *) :: * where
 #if __GLASGOW_HASKELL__ >= 800
   Weights_ (M1 C ('MetaCons c _i _j) _f) = L c
 #else
-  Weights_ (M1 C _c _f) = ()
+  Weights_ (M1 C _c _f) = L ""
 #endif
 
 data a :| b = N a Int b
@@ -73,14 +79,14 @@ data L (c :: Symbol) = L
 -- Two ways of constructing them.
 --
 -- @
--- 'weights' (x1 '%' x2 '%' ... '%' xn '%' ()) :: 'Weights' a
+-- (x1 '%' x2 '%' ... '%' xn '%' ()) :: 'Weights' a
 -- 'uniform' :: 'Weights' a
 -- @
 --
--- Using @weights@, there must be exactly as many weights as
+-- Using @('%')@, there must be exactly as many weights as
 -- there are constructors.
 --
--- 'uniform' is equivalent to @'weights' (1 '%' ... '%' 1 '%' ())@
+-- 'uniform' is equivalent to @(1 '%' ... '%' 1 '%' ())@
 -- (automatically fills out the right number of 1s).
 data Weights a = Weights (Weights_ (Rep a)) Int
 
@@ -88,10 +94,11 @@ data Weights a = Weights (Weights_ (Rep a)) Int
 -- constructor for additional compile-time checking.
 --
 -- @
--- 'weights' ((9 :: 'W' \"Leaf\") '%' (8 :: 'W' \"Node\") '%' ())
+-- ((9 :: 'W' \"Leaf\") '%' (8 :: 'W' \"Node\") '%' ())
 -- @
 newtype W (c :: Symbol) = W Int deriving Num
 
+{-# DEPRECATED weights "Can be omitted" #-}
 -- | A smart constructor to specify a custom distribution.
 weights :: (Weights_ (Rep a), Int, ()) -> Weights a
 weights (w, n, ()) = Weights w n
@@ -106,27 +113,45 @@ type family First a :: Symbol where
   First (a :| _b) = First a
   First (L c) = c
 
+type family First' w where
+  First' (Weights a) = First (Weights_ (Rep a))
+  First' (a, Int, r) = First a
+
+type family Prec' w where
+  Prec' (Weights a) = Prec (Weights_ (Rep a)) ()
+  Prec' (a, Int, r) = Prec a r
+
+class WeightBuilder' w where
+
+  -- | A binary constructor for building up trees of weights.
+  (%) :: W (First' w) -> Prec' w -> w
+
+instance WeightBuilder (Weights_ (Rep a)) => WeightBuilder' (Weights a) where
+  w % prec = weights (w %. prec)
+
+instance WeightBuilder a => WeightBuilder' (a, Int, r) where
+  (%) = (%.)
+
 class WeightBuilder a where
   type Prec a r
 
-  -- | A binary constructor for building up trees of weights.
-  (%) :: W (First a) -> Prec a r -> (a, Int, r)
+  (%.) :: W (First a) -> Prec a r -> (a, Int, r)
 
 infixr 1 %
 
 instance WeightBuilder a => WeightBuilder (a :| b) where
   type Prec (a :| b) r = Prec a (b, Int, r)
-  m % prec =
+  m %. prec =
     let (a, n, (b, p, r)) = m % prec
     in (N a n b, n + p, r)
 
 instance WeightBuilder (L c) where
   type Prec (L c) r = r
-  W m % prec = (L, m, prec)
+  W m %. prec = (L, m, prec)
 
 instance WeightBuilder () where
   type Prec () r = r
-  W m % prec = ((), m, prec)
+  W m %. prec = ((), m, prec)
 
 class UniformWeight a where
   uniformWeight :: (a, Int)
@@ -161,12 +186,16 @@ instance (GASum sized f, GASum sized g) => GA sized (f :+: g) where
 instance GAProduct sized f => GA sized (M1 C c f) where
   ga z _ _ = fmap M1 (gaProduct z)
 
-
-gArbitrarySingle
-  :: forall sized f p c0 proxy
-  .  (GA sized f, Weights_ f ~ L c0)
-  => proxy sized -> Gen (f p)
-gArbitrarySingle z = ga z L 0
+#if __GLASGOW_HASKELL__ >= 800
+instance {-# INCOHERENT #-}
+  TypeError
+    (     'Text "Unrecognized Rep: "
+    ':<>: 'ShowType f
+    ':$$: 'Text "Possible cause: missing Generic instance"
+    )
+  => GA sized f where
+  ga = error "Type error"
+#endif
 
 gaSum' :: GASum sized f => proxy sized -> Weights_ f -> Int -> Gen (f p)
 gaSum' z w n = do
