@@ -39,7 +39,7 @@ genericArbitrary'
   -> Gen a
 genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 
--- | Shorthand for @\n -> 'genericArbitrary'' n 'uniform'@.
+-- | Shorthand for @'genericArbitrary'' 'uniform'@.
 genericArbitraryU'
   :: forall a
   . (Generic a, GA Sized (Rep a), BaseCase a, UniformWeight (Weights_ (Rep a)))
