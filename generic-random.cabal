@@ -1,7 +1,13 @@
 name:                generic-random
 version:             1.0.0.0
 synopsis:            Generic random generators
-description:         Please see the README.
+description:
+    For more information
+    .
+    - "Generic.Random.Tutorial"
+    .
+    - https://byorgey.wordpress.com/2016/09/20/the-generic-random-library-part-1-simple-generic-arbitrary-instances/
+
 homepage:            http://github.com/lysxia/generic-random
 license:             MIT
 license-file:        LICENSE
