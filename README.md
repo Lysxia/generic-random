@@ -7,31 +7,31 @@ Example
 -------
 
 ```haskell
-    {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric #-}
 
-    import GHC.Generics (Generic)
-    import Test.QuickCheck
-    import Generic.Random
+import GHC.Generics (Generic)
+import Test.QuickCheck
+import Generic.Random
 
-    data Tree a = Leaf | Node (Tree a) a (Tree a)
-      deriving (Show, Generic)
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+  deriving (Show, Generic)
 
-    instance Arbitrary a => Arbitrary (Tree a) where
-      arbitrary = genericArbitraryRec uniform `withBaseCase` return Leaf
+instance Arbitrary a => Arbitrary (Tree a) where
+  arbitrary = genericArbitraryRec uniform `withBaseCase` return Leaf
 
-    -- Equivalent to
-    -- > arbitrary =
-    -- >   sized $ \n ->
-    -- >     if n == 0 then
-    -- >       return Leaf
-    -- >     else
-    -- >       oneof
-    -- >         [ return Leaf
-    -- >         , resize (n `div` 3) $
-    -- >             Node <$> arbitrary <*> arbitrary <*> arbitrary
-    -- >         ]
+-- Equivalent to
+-- > arbitrary =
+-- >   sized $ \n ->
+-- >     if n == 0 then
+-- >       return Leaf
+-- >     else
+-- >       oneof
+-- >         [ return Leaf
+-- >         , resize (n `div` 3) $
+-- >             Node <$> arbitrary <*> arbitrary <*> arbitrary
+-- >         ]
 
-    main = sample (arbitrary :: Gen (Tree ()))
+main = sample (arbitrary :: Gen (Tree ()))
 ```
 
 Features
