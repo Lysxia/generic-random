@@ -21,6 +21,7 @@ library
     Generic.Random.Generic
     Generic.Random.Internal.BaseCase
     Generic.Random.Internal.Generic
+    Generic.Random.Tutorial
   build-depends:
     base >= 4.7 && < 4.11,
     QuickCheck
