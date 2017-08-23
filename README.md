@@ -1,7 +1,10 @@
 Generic random generators [![Hackage](https://img.shields.io/hackage/v/generic-random.svg)](https://hackage.haskell.org/package/generic-random) [![Build Status](https://travis-ci.org/Lysxia/generic-random.svg)](https://travis-ci.org/Lysxia/generic-random)
 =========================
 
-Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerplate.
+Derive simple random generators for [QuickCheck](https://hackage.haskell.org/package/QuickCheck) using generics.
+
+Example
+-------
 
 ```haskell
     {-# LANGUAGE DeriveGeneric #-}
@@ -31,8 +34,11 @@ Say goodbye to `Constructor <$> arbitrary <*> arbitrary <*> arbitrary`-boilerpla
     main = sample (arbitrary :: Gen (Tree ()))
 ```
 
-- User-specified distribution of constructors, with a compile-time check that
-  weights have been specified for all constructors.
-- A simple (optional) strategy to ensure termination: `Test.QuickCheck.Gen`'s
-  size parameter decreases at every recursive `genericArbitrary'` call; when it
-  reaches zero, sample directly from a trivially terminating generator.
+Features
+--------
+
+- User-specified distribution of constructors.
+- A simple (optional) strategy to ensure termination for recursive types:
+  using `genericArbitrary'`, `Test.QuickCheck.Gen`'s size parameter decreases
+  at every recursive call; when it reaches zero, sample directly from a
+  trivially terminating generator.
