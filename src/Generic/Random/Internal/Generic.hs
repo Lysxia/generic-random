@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -47,7 +48,7 @@ genericArbitrary
   :: (Generic a, GA UnsizedOpts (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitrary (Weights w n) = fmap to (ga (Proxy :: Proxy UnsizedOpts) w n)
+genericArbitrary (Weights w n) = fmap to (ga (Options Nil :: UnsizedOpts) w n)
 
 -- | Pick every constructor with equal probability.
 -- Equivalent to @'genericArbitrary' 'uniform'@.
@@ -77,7 +78,7 @@ genericArbitraryRec
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitraryRec (Weights w n) =
-  fmap to (ga (Proxy :: Proxy SizedOpts) w n :: Gen (Rep a p))
+  fmap to (ga (Options Nil :: SizedOpts) w n :: Gen (Rep a p))
 
 -- * Internal
 
@@ -195,8 +196,13 @@ instance UniformWeight (Weights_ f) => UniformWeight_ f
 
 
 -- | Type-level options for 'GA'.
-data Options (s :: Sizing) (r :: [Type])
+data Options (s :: Sizing) (g :: [Type]) = Options
+  { generators :: GenList g
+  }
 
+data GenList (g :: [Type]) where
+  Nil :: GenList '[]
+  (:@) :: Gen a -> GenList g -> GenList (a ': g)
 
 -- | Whether to decrease the size parameter before generating fields.
 data Sizing = Sized | Unsized
@@ -207,17 +213,17 @@ type SizedOpts = (Options 'Sized '[] :: Type)
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _) = s
 
-proxySizing :: proxy opts -> Proxy (SizingOf opts)
+proxySizing :: opts -> Proxy (SizingOf opts)
 proxySizing _ = Proxy
 
 
--- | List of types for which to reify the arbitrary call.
-type Reifying = [Type]
+type family GeneratorsOf opts :: [Type]
+type instance GeneratorsOf (Options _ g) = g
 
 
 -- | Generic Arbitrary
 class GA opts f where
-  ga :: proxy opts -> Weights_ f -> Int -> Gen (f p)
+  ga :: opts -> Weights_ f -> Int -> Gen (f p)
 
 instance GA opts f => GA opts (M1 D c f) where
   ga z w n = fmap M1 (ga z w n)
@@ -239,13 +245,13 @@ instance {-# INCOHERENT #-}
   ga = error "Type error"
 #endif
 
-gaSum' :: GASum opts f => proxy opts -> Weights_ f -> Int -> Gen (f p)
+gaSum' :: GASum opts f => opts -> Weights_ f -> Int -> Gen (f p)
 gaSum' z w n = do
   i <- choose (0, n-1)
   gaSum z i w
 
 class GASum opts f where
-  gaSum :: proxy opts -> Int -> Weights_ f -> Gen (f p)
+  gaSum :: opts -> Int -> Weights_ f -> Gen (f p)
 
 instance (GASum opts f, GASum opts g) => GASum opts (f :+: g) where
   gaSum z i (N a n b)
@@ -257,7 +263,7 @@ instance GAProduct (SizingOf opts) opts f => GASum opts (M1 i c f) where
 
 
 class GAProduct (s :: Sizing) opts f where
-  gaProduct :: proxys s -> proxy opts -> Gen (f p)
+  gaProduct :: proxys s -> opts -> Gen (f p)
 
 instance GAProduct' opts f => GAProduct 'Unsized opts f where
   gaProduct _ = gaProduct'
@@ -272,7 +278,7 @@ instance {-# OVERLAPPING #-} GAProduct 'Sized opts U1 where
 
 
 class GAProduct' opts f where
-  gaProduct' :: proxy opts -> Gen (f p)
+  gaProduct' :: opts -> Gen (f p)
 
 instance GAProduct' opts U1 where
   gaProduct' _ = pure U1
