@@ -12,11 +12,13 @@
 {-# LANGUAGE UndecidableInstances #-}
 #if __GLASGOW_HASKELL__ < 710
 {-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE IncoherentInstances #-}
 #endif
 
 module Generic.Random.Internal.Generic where
 
 import Control.Applicative
+import Data.Coerce
 #if __GLASGOW_HASKELL__ >= 800
 import Data.Kind
 #endif
@@ -48,7 +50,7 @@ genericArbitrary
   :: (Generic a, GA UnsizedOpts (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitrary (Weights w n) = fmap to (ga (Options Nil :: UnsizedOpts) w n)
+genericArbitrary = genericArbitraryWith unsizedOpts
 
 -- | Pick every constructor with equal probability.
 -- Equivalent to @'genericArbitrary' 'uniform'@.
@@ -73,12 +75,51 @@ genericArbitrarySingle = genericArbitraryU
 --
 -- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
 genericArbitraryRec
-  :: forall a
-  . (Generic a, GA SizedOpts (Rep a))
+  :: (Generic a, GA SizedOpts (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitraryRec (Weights w n) =
-  fmap to (ga (Options Nil :: SizedOpts) w n :: Gen (Rep a p))
+genericArbitraryRec = genericArbitraryWith sizedOpts
+
+-- | 'genericArbitrary' with explicit generators.
+genericArbitraryG
+  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a))
+  => GenList g
+  -> Weights a
+  -> Gen a
+genericArbitraryG gs = genericArbitraryWith opts
+  where
+    opts = setGenerators gs unsizedOpts
+
+-- | 'genericArbitraryU' with explicit generators.
+genericArbitraryUG
+  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), UniformWeight_ (Rep a))
+  => GenList g
+  -> Gen a
+genericArbitraryUG gs = genericArbitraryG gs uniform
+
+-- | 'genericArbitrarySingle' with explicit generators.
+genericArbitrarySingleG
+  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), Weights_ (Rep a) ~ L c0)
+  => GenList g
+  -> Gen a
+genericArbitrarySingleG = genericArbitraryUG
+
+-- | 'genericArbitraryRec' with explicit generators.
+genericArbitraryRecG
+  :: (Generic a, GA (SetGens g SizedOpts) (Rep a))
+  => GenList g
+  -> Weights a  -- ^ List of weights for every constructor
+  -> Gen a
+genericArbitraryRecG gs = genericArbitraryWith opts
+  where
+    opts = setGenerators gs sizedOpts
+
+-- | General generic generator with custom options.
+genericArbitraryWith
+  :: (Generic a, GA opts (Rep a))
+  => opts -> Weights a -> Gen a
+genericArbitraryWith opts (Weights w n) =
+  fmap to (ga opts w n)
 
 -- * Internal
 
@@ -197,12 +238,15 @@ instance UniformWeight (Weights_ f) => UniformWeight_ f
 
 -- | Type-level options for 'GA'.
 data Options (s :: Sizing) (g :: [Type]) = Options
-  { generators :: GenList g
+  { _generators :: GenList g
   }
 
-data GenList (g :: [Type]) where
-  Nil :: GenList '[]
-  (:@) :: Gen a -> GenList g -> GenList (a ': g)
+unsizedOpts :: UnsizedOpts
+unsizedOpts = Options Nil
+
+sizedOpts :: SizedOpts
+sizedOpts = Options Nil
+
 
 -- | Whether to decrease the size parameter before generating fields.
 data Sizing = Sized | Unsized
@@ -216,10 +260,34 @@ type instance SizingOf (Options s _) = s
 proxySizing :: opts -> Proxy (SizingOf opts)
 proxySizing _ = Proxy
 
+setSized :: Options s g -> Options 'Sized g
+setSized = coerce
+
+setUnsized :: Options s g -> Options 'Unsized g
+setUnsized = coerce
+
+
+data GenList (g :: [Type]) where
+  Nil :: GenList '[]
+  (:@) :: Gen a -> GenList g -> GenList (a ': g)
+
+infixr 3 :@
 
 type family GeneratorsOf opts :: [Type]
 type instance GeneratorsOf (Options _ g) = g
 
+class HasGenerators opts where
+  generators :: opts -> GenList (GeneratorsOf opts)
+
+instance HasGenerators (Options s g) where
+  generators = _generators
+
+setGenerators :: GenList g -> Options s g0 -> Options s g
+setGenerators gens (Options _) = Options gens
+
+
+type family SetGens (g :: [Type]) opts
+type instance SetGens g (Options s _g) = Options s g
 
 -- | Generic Arbitrary
 class GA opts f where
@@ -283,8 +351,9 @@ class GAProduct' opts f where
 instance GAProduct' opts U1 where
   gaProduct' _ = pure U1
 
-instance Arbitrary c => GAProduct' opts (K1 i c) where
-  gaProduct' _ = fmap K1 arbitrary
+instance (HasGenerators opts, ArbitraryOr (GeneratorsOf opts) c)
+  => GAProduct' opts (K1 i c) where
+  gaProduct' opts = fmap K1 (arbitraryOr (generators opts))
 
 instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
   gaProduct' = (liftA2 . liftA2) (:*:) gaProduct' gaProduct'
@@ -296,6 +365,19 @@ instance GAProduct' opts f => GAProduct' opts (M1 i c f) where
 type family Arity f :: Nat where
   Arity (f :*: g) = Arity f + Arity g
   Arity (M1 _i _c _f) = 1
+
+
+class ArbitraryOr (g :: [Type]) a where
+  arbitraryOr :: GenList g -> Gen a
+
+instance {-# INCOHERENT #-} ArbitraryOr (a ': g) a where
+  arbitraryOr (gen :@ _) = gen
+
+instance {-# OVERLAPPABLE #-} ArbitraryOr g a => ArbitraryOr (b ': g) a where
+  arbitraryOr (_ :@ gens) = arbitraryOr gens
+
+instance Arbitrary a => ArbitraryOr '[] a where
+  arbitraryOr Nil = arbitrary
 
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))

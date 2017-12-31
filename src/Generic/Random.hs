@@ -14,6 +14,11 @@ module Generic.Random
   , genericArbitrary'
   , genericArbitraryU'
   , genericArbitraryRec
+  , genericArbitraryG
+  , genericArbitraryUG
+  , genericArbitrarySingleG
+  , genericArbitraryRecG
+  , genericArbitraryWith
 
     -- * Specifying finite distributions
   , Weights
@@ -24,6 +29,18 @@ module Generic.Random
     -- * Base cases for recursive types
   , withBaseCase
   , BaseCase (..)
+
+    -- * Full options
+  , Options ()
+  , SizedOpts
+  , sizedOpts
+  , UnsizedOpts
+  , unsizedOpts
+  , Sizing (..)
+  , setSized
+  , setUnsized
+  , GenList (..)
+  , setGenerators
 
   , weights
   ) where
