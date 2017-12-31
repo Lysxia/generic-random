@@ -37,17 +37,17 @@ import Test.QuickCheck
 -- Picks the first constructor with probability @2/10@,
 -- the second with probability @3/10@, the third with probability @5/10@.
 genericArbitrary
-  :: (Generic a, GA Unsized (Rep a))
+  :: (Generic a, GA UnsizedOpts (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitrary (Weights w n) = fmap to (ga (Proxy :: Proxy Unsized) w n)
+genericArbitrary (Weights w n) = fmap to (ga (Proxy :: Proxy UnsizedOpts) w n)
 
 -- | Pick every constructor with equal probability.
 -- Equivalent to @'genericArbitrary' 'uniform'@.
 --
 -- > genericArbitraryU :: Gen a
 genericArbitraryU
-  :: (Generic a, GA Unsized (Rep a), UniformWeight_ (Rep a))
+  :: (Generic a, GA UnsizedOpts (Rep a), UniformWeight_ (Rep a))
   => Gen a
 genericArbitraryU = genericArbitrary uniform
 
@@ -56,7 +56,7 @@ genericArbitraryU = genericArbitrary uniform
 --
 -- > genericArbitrarySingle :: Gen a
 genericArbitrarySingle
-  :: (Generic a, GA Unsized (Rep a), Weights_ (Rep a) ~ L c0)
+  :: (Generic a, GA UnsizedOpts (Rep a), Weights_ (Rep a) ~ L c0)
   => Gen a
 genericArbitrarySingle = genericArbitraryU
 
@@ -66,11 +66,11 @@ genericArbitrarySingle = genericArbitraryU
 -- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
 genericArbitraryRec
   :: forall a
-  . (Generic a, GA Sized (Rep a))
+  . (Generic a, GA SizedOpts (Rep a))
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitraryRec (Weights w n) =
-  fmap to (ga (Proxy :: Proxy Sized) w n :: Gen (Rep a p))
+  fmap to (ga (Proxy :: Proxy SizedOpts) w n :: Gen (Rep a p))
 
 -- * Internal
 
@@ -186,21 +186,35 @@ instance UniformWeight () where
 class UniformWeight (Weights_ f) => UniformWeight_ f
 instance UniformWeight (Weights_ f) => UniformWeight_ f
 
-data Sized
-data Unsized
+
+-- | Type-level options for 'GA'.
+data Options (s :: Sizing)
+
+-- | Whether to decrease the size parameter before generating fields.
+data Sizing = Sized | Unsized
+
+type UnsizedOpts = Options 'Unsized
+type SizedOpts = Options 'Sized
+
+type family SizingOf opts :: Sizing
+type instance SizingOf (Options s) = s
+
+proxySizing :: proxy opts -> Proxy (SizingOf opts)
+proxySizing _ = Proxy
+
 
 -- | Generic Arbitrary
-class GA sized f where
-  ga :: proxy sized -> Weights_ f -> Int -> Gen (f p)
+class GA opts f where
+  ga :: proxy opts -> Weights_ f -> Int -> Gen (f p)
 
-instance GA sized f => GA sized (M1 D c f) where
+instance GA opts f => GA opts (M1 D c f) where
   ga z w n = fmap M1 (ga z w n)
 
-instance (GASum sized f, GASum sized g) => GA sized (f :+: g) where
+instance (GASum opts f, GASum opts g) => GA opts (f :+: g) where
   ga = gaSum'
 
-instance GAProduct sized f => GA sized (M1 C c f) where
-  ga z _ _ = fmap M1 (gaProduct z)
+instance GAProduct (SizingOf opts) opts f => GA opts (M1 C c f) where
+  ga z _ _ = fmap M1 (gaProduct (proxySizing z) z)
 
 #if __GLASGOW_HASKELL__ >= 800
 instance {-# INCOHERENT #-}
@@ -209,40 +223,40 @@ instance {-# INCOHERENT #-}
     ':<>: 'ShowType f
     ':$$: 'Text "Possible cause: missing Generic instance"
     )
-  => GA sized f where
+  => GA opts f where
   ga = error "Type error"
 #endif
 
-gaSum' :: GASum sized f => proxy sized -> Weights_ f -> Int -> Gen (f p)
+gaSum' :: GASum opts f => proxy opts -> Weights_ f -> Int -> Gen (f p)
 gaSum' z w n = do
   i <- choose (0, n-1)
   gaSum z i w
 
-class GASum sized f where
-  gaSum :: proxy sized -> Int -> Weights_ f -> Gen (f p)
+class GASum opts f where
+  gaSum :: proxy opts -> Int -> Weights_ f -> Gen (f p)
 
-instance (GASum sized f, GASum sized g) => GASum sized (f :+: g) where
+instance (GASum opts f, GASum opts g) => GASum opts (f :+: g) where
   gaSum z i (N a n b)
     | i < n = fmap L1 (gaSum z i a)
     | otherwise = fmap R1 (gaSum z (i - n) b)
 
-instance GAProduct sized f => GASum sized (M1 i c f) where
-  gaSum z _ _ = fmap M1 (gaProduct z)
+instance GAProduct (SizingOf opts) opts f => GASum opts (M1 i c f) where
+  gaSum z _ _ = fmap M1 (gaProduct (proxySizing z) z)
 
 
-class GAProduct sized f where
-  gaProduct :: proxy sized -> Gen (f p)
+class GAProduct (s :: Sizing) opts f where
+  gaProduct :: proxys s -> proxy opts -> Gen (f p)
 
-instance GAProduct' f => GAProduct Unsized f where
-  gaProduct _ = gaProduct'
+instance GAProduct' f => GAProduct 'Unsized opts f where
+  gaProduct _ _ = gaProduct'
 
-instance (GAProduct' f, KnownNat (Arity f)) => GAProduct Sized f where
-  gaProduct _ = sized $ \n -> resize (n `div` arity) gaProduct'
+instance (GAProduct' f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
+  gaProduct _ _ = sized $ \n -> resize (n `div` arity) gaProduct'
     where
       arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
 
-instance {-# OVERLAPPING #-} GAProduct Sized U1 where
-  gaProduct _ = pure U1
+instance {-# OVERLAPPING #-} GAProduct 'Sized opts U1 where
+  gaProduct _ _ = pure U1
 
 
 class GAProduct' f where
