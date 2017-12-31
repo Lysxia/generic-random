@@ -41,8 +41,6 @@ module Generic.Random
   , setUnsized
   , GenList (..)
   , setGenerators
-
-  , weights
   ) where
 
 import Generic.Random.Internal.BaseCase

@@ -160,8 +160,9 @@ data Weights a = Weights (Weights_ (Rep a)) Int
 -- @
 newtype W (c :: Symbol) = W Int deriving Num
 
-{-# DEPRECATED weights "Can be omitted" #-}
 -- | A smart constructor to specify a custom distribution.
+-- It can be omitted for the '%' operator is overloaded to
+-- insert it.
 weights :: (Weights_ (Rep a), Int, ()) -> Weights a
 weights (w, n, ()) = Weights w n
 
