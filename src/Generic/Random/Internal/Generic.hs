@@ -16,6 +16,9 @@
 module Generic.Random.Internal.Generic where
 
 import Control.Applicative
+#if __GLASGOW_HASKELL__ >= 800
+import Data.Kind
+#endif
 import Data.Proxy
 #if __GLASGOW_HASKELL__ >= 800
 import GHC.Generics hiding (S)
@@ -24,6 +27,10 @@ import GHC.Generics hiding (S, Arity)
 #endif
 import GHC.TypeLits
 import Test.QuickCheck
+
+#if __GLASGOW_HASKELL__ < 800
+type Type = *
+#endif
 
 -- * Random generators
 
@@ -188,19 +195,24 @@ instance UniformWeight (Weights_ f) => UniformWeight_ f
 
 
 -- | Type-level options for 'GA'.
-data Options (s :: Sizing)
+data Options (s :: Sizing) (r :: [Type])
+
 
 -- | Whether to decrease the size parameter before generating fields.
 data Sizing = Sized | Unsized
 
-type UnsizedOpts = Options 'Unsized
-type SizedOpts = Options 'Sized
+type UnsizedOpts = (Options 'Unsized '[] :: Type)
+type SizedOpts = (Options 'Sized '[] :: Type)
 
 type family SizingOf opts :: Sizing
-type instance SizingOf (Options s) = s
+type instance SizingOf (Options s _) = s
 
 proxySizing :: proxy opts -> Proxy (SizingOf opts)
 proxySizing _ = Proxy
+
+
+-- | List of types for which to reify the arbitrary call.
+type Reifying = [Type]
 
 
 -- | Generic Arbitrary
@@ -247,11 +259,11 @@ instance GAProduct (SizingOf opts) opts f => GASum opts (M1 i c f) where
 class GAProduct (s :: Sizing) opts f where
   gaProduct :: proxys s -> proxy opts -> Gen (f p)
 
-instance GAProduct' f => GAProduct 'Unsized opts f where
-  gaProduct _ _ = gaProduct'
+instance GAProduct' opts f => GAProduct 'Unsized opts f where
+  gaProduct _ = gaProduct'
 
-instance (GAProduct' f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
-  gaProduct _ _ = sized $ \n -> resize (n `div` arity) gaProduct'
+instance (GAProduct' opts f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
+  gaProduct _ opts = sized $ \n -> resize (n `div` arity) (gaProduct' opts)
     where
       arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
 
@@ -259,20 +271,20 @@ instance {-# OVERLAPPING #-} GAProduct 'Sized opts U1 where
   gaProduct _ _ = pure U1
 
 
-class GAProduct' f where
-  gaProduct' :: Gen (f p)
+class GAProduct' opts f where
+  gaProduct' :: proxy opts -> Gen (f p)
 
-instance GAProduct' U1 where
-  gaProduct' = pure U1
+instance GAProduct' opts U1 where
+  gaProduct' _ = pure U1
 
-instance Arbitrary c => GAProduct' (K1 i c) where
-  gaProduct' = fmap K1 arbitrary
+instance Arbitrary c => GAProduct' opts (K1 i c) where
+  gaProduct' _ = fmap K1 arbitrary
 
-instance (GAProduct' f, GAProduct' g) => GAProduct' (f :*: g) where
-  gaProduct' = liftA2 (:*:) gaProduct' gaProduct'
+instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
+  gaProduct' = (liftA2 . liftA2) (:*:) gaProduct' gaProduct'
 
-instance GAProduct' f => GAProduct' (M1 i c f) where
-  gaProduct' = fmap M1 gaProduct'
+instance GAProduct' opts f => GAProduct' opts (M1 i c f) where
+  gaProduct' = (fmap . fmap) M1 gaProduct'
 
 
 type family Arity f :: Nat where
