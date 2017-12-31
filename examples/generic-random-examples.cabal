@@ -13,3 +13,15 @@ executable generic-example
     QuickCheck,
     generic-random
   default-language: Haskell2010
+
+executable text-example
+  main-is: text.hs
+  ghc-options: -Wall
+  if impl(ghc < 7.10)
+    ghc-options: -fcontext-stack=30
+  build-depends:
+    base,
+    QuickCheck,
+    text,
+    generic-random
+  default-language: Haskell2010
