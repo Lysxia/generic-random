@@ -81,6 +81,16 @@ genericArbitraryRec
 genericArbitraryRec = genericArbitraryWith sizedOpts
 
 -- | 'genericArbitrary' with explicit generators.
+--
+-- === Example
+--
+-- Overriding generators for 'String' and 'Int' fields.
+-- Make sure the types of the generators are non-ambiguous.
+--
+-- > genericArbitraryG
+-- >   (  (filter (/= '\NUL') <$> arbitrary)
+-- >   :@ (getNonNegative <$> arbitrary :: Gen Int)
+-- >   ) (17 % 19 % ())
 genericArbitraryG
   :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a))
   => GenList g
