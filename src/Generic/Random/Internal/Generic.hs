@@ -302,17 +302,6 @@ instance (GASum opts f, GASum opts g) => GA opts (f :+: g) where
 instance GAProduct (SizingOf opts) opts f => GA opts (M1 C c f) where
   ga z _ _ = fmap M1 (gaProduct (proxySizing z) z)
 
-#if __GLASGOW_HASKELL__ >= 800
-instance {-# INCOHERENT #-}
-  TypeError
-    (     'Text "Unrecognized Rep: "
-    ':<>: 'ShowType f
-    ':$$: 'Text "Possible cause: missing Generic instance"
-    )
-  => GA opts f where
-  ga = error "Type error"
-#endif
-
 gaSum' :: GASum opts f => opts -> Weights_ f -> Int -> Gen (f p)
 gaSum' z w n = do
   i <- choose (0, n-1)
