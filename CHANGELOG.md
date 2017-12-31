@@ -1,5 +1,14 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.1.0.0
+
+- Add option to specify custom generators for certain types of fields,
+  overriding Arbitrary instances
+  + Add `genericArbitraryG`, `genericArbitraryUG`, `genericArbitrarySingleG`,
+    `genericArbitraryRecG`
+- Deprecate `Generic.Random.Generic`
+- Remove `weights` from the external API
+
 # 1.0.0.0
 
 - Make the main module `Generic.Random`
