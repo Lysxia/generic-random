@@ -48,6 +48,9 @@ module Generic.Random
 #endif
   , setGenerators
 
+    -- * Public classes
+  , GArbitrary
+  , GUniformWeight
   ) where
 
 import Generic.Random.Internal.BaseCase

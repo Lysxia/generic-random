@@ -1,5 +1,6 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -52,7 +53,7 @@ import Test.QuickCheck (Arbitrary(..), Gen, choose, resize, sized)
 -- Picks the first constructor with probability @2/10@,
 -- the second with probability @3/10@, the third with probability @5/10@.
 genericArbitrary
-  :: (Generic a, GA UnsizedOpts (Rep a))
+  :: (GArbitrary UnsizedOpts a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary = genericArbitraryWith unsizedOpts
@@ -62,7 +63,7 @@ genericArbitrary = genericArbitraryWith unsizedOpts
 --
 -- > genericArbitraryU :: Gen a
 genericArbitraryU
-  :: (Generic a, GA UnsizedOpts (Rep a), UniformWeight_ (Rep a))
+  :: (GArbitrary UnsizedOpts a, GUniformWeight a)
   => Gen a
 genericArbitraryU = genericArbitrary uniform
 
@@ -71,7 +72,7 @@ genericArbitraryU = genericArbitrary uniform
 --
 -- > genericArbitrarySingle :: Gen a
 genericArbitrarySingle
-  :: (Generic a, GA UnsizedOpts (Rep a), Weights_ (Rep a) ~ L c0)
+  :: (GArbitrary UnsizedOpts a, Weights_ (Rep a) ~ L c0)
   => Gen a
 genericArbitrarySingle = genericArbitraryU
 
@@ -80,7 +81,7 @@ genericArbitrarySingle = genericArbitraryU
 --
 -- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
 genericArbitraryRec
-  :: (Generic a, GA SizedOpts (Rep a))
+  :: (GArbitrary SizedOpts a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitraryRec = genericArbitraryWith sizedOpts
@@ -107,7 +108,7 @@ genericArbitraryRec = genericArbitraryWith sizedOpts
 -- (i.e., either @a@ or @'Field' "x" a@), the generator for the first
 -- match will be picked.
 genericArbitraryG
-  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a))
+  :: (GArbitrary (SetGens g UnsizedOpts) a)
   => GenList g
   -> Weights a
   -> Gen a
@@ -118,7 +119,7 @@ genericArbitraryG gs = genericArbitraryWith opts
 -- | 'genericArbitraryU' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitraryUG
-  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), UniformWeight_ (Rep a))
+  :: (GArbitrary (SetGens g UnsizedOpts) a, GUniformWeight a)
   => GenList g
   -> Gen a
 genericArbitraryUG gs = genericArbitraryG gs uniform
@@ -126,7 +127,7 @@ genericArbitraryUG gs = genericArbitraryG gs uniform
 -- | 'genericArbitrarySingle' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitrarySingleG
-  :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), Weights_ (Rep a) ~ L c0)
+  :: (GArbitrary (SetGens g UnsizedOpts) a, Weights_ (Rep a) ~ L c0)
   => GenList g
   -> Gen a
 genericArbitrarySingleG = genericArbitraryUG
@@ -134,7 +135,7 @@ genericArbitrarySingleG = genericArbitraryUG
 -- | 'genericArbitraryRec' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitraryRecG
-  :: (Generic a, GA (SetGens g SizedOpts) (Rep a))
+  :: (GArbitrary (SetGens g SizedOpts) a)
   => GenList g
   -> Weights a  -- ^ List of weights for every constructor
   -> Gen a
@@ -144,7 +145,7 @@ genericArbitraryRecG gs = genericArbitraryWith opts
 
 -- | General generic generator with custom options.
 genericArbitraryWith
-  :: (Generic a, GA opts (Rep a))
+  :: (GArbitrary opts a)
   => opts -> Weights a -> Gen a
 genericArbitraryWith opts (Weights w n) =
   fmap to (ga opts w n)
@@ -264,8 +265,12 @@ instance UniformWeight () where
 class UniformWeight (Weights_ f) => UniformWeight_ f
 instance UniformWeight (Weights_ f) => UniformWeight_ f
 
+-- | Derived uniform distribution of constructors for @a@.
+class UniformWeight_ (Rep a) => GUniformWeight a
+instance UniformWeight_ (Rep a) => GUniformWeight a
 
--- | Type-level options for 'GA'.
+
+-- | Type-level options for 'GArbitrary'.
 data Options (s :: Sizing) (g :: [Type]) = Options
   { _generators :: GenList g
   }
@@ -334,6 +339,10 @@ field _ = Field
 -- | Generic Arbitrary
 class GA opts f where
   ga :: opts -> Weights_ f -> Int -> Gen (f p)
+
+-- | Generic Arbitrary
+class (Generic a, GA opts (Rep a)) => GArbitrary opts a
+instance (Generic a, GA opts (Rep a)) => GArbitrary opts a
 
 instance GA opts f => GA opts (M1 D c f) where
   ga z w n = fmap M1 (ga z w n)

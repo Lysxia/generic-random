@@ -6,6 +6,7 @@ https://github.com/Lysxia/generic-random/blob/master/changelog.md
   overriding Arbitrary instances
   + Add `genericArbitraryG`, `genericArbitraryUG`, `genericArbitrarySingleG`,
     `genericArbitraryRecG`
+- Add `GArbitrary` and `GUniformWeight` synonyms
 - Deprecate `Generic.Random.Generic`
 - Remove `weights` from the external API
 

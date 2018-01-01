@@ -37,7 +37,7 @@ import Generic.Random.Internal.Generic
 --
 -- > genericArbitrary' (17 % 19 % 23 % ()) :: Gen a
 genericArbitrary'
-  :: (Generic a, GA SizedOpts (Rep a), BaseCase a)
+  :: (GArbitrary SizedOpts a, BaseCase a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
@@ -46,7 +46,7 @@ genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 --
 -- > genericArbitraryU :: Gen a
 genericArbitraryU'
-  :: (Generic a, GA SizedOpts (Rep a), BaseCase a, UniformWeight_ (Rep a))
+  :: (GArbitrary SizedOpts a, BaseCase a, GUniformWeight a)
   => Gen a
 genericArbitraryU' = genericArbitrary' uniform
 
