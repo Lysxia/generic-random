@@ -1,5 +1,9 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.1.0.1
+
+- Fix build for GHC<8
+
 # 1.1.0.0
 
 - Add option to specify custom generators for certain fields,
