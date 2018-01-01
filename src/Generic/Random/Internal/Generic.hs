@@ -17,19 +17,19 @@
 
 module Generic.Random.Internal.Generic where
 
-import Control.Applicative
-import Data.Coerce
+import Control.Applicative (Alternative(..), liftA2)
+import Data.Coerce (coerce)
 #if __GLASGOW_HASKELL__ >= 800
-import Data.Kind
+import Data.Kind (Type)
 #endif
-import Data.Proxy
+import Data.Proxy (Proxy(..))
 #if __GLASGOW_HASKELL__ >= 800
 import GHC.Generics hiding (S)
 #else
 import GHC.Generics hiding (S, Arity)
 #endif
-import GHC.TypeLits
-import Test.QuickCheck
+import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
+import Test.QuickCheck (Arbitrary(..), Gen, choose, resize, sized)
 
 #if __GLASGOW_HASKELL__ < 800
 type Type = *
