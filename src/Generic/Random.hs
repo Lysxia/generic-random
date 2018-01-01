@@ -5,6 +5,8 @@
 -- - "Generic.Random.Tutorial"
 -- - https://byorgey.wordpress.com/2016/09/20/the-generic-random-library-part-1-simple-generic-arbitrary-instances/
 
+{-# LANGUAGE CPP #-}
+
 module Generic.Random
   (
     -- * Arbitrary implementations
@@ -40,6 +42,10 @@ module Generic.Random
   , setSized
   , setUnsized
   , GenList (..)
+#if __GLASGOW_HASKELL__ >= 800
+  , Field (..)
+  , field
+#endif
   , setGenerators
   ) where
 

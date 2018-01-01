@@ -280,7 +280,6 @@ setSized = coerce
 setUnsized :: Options s g -> Options 'Unsized g
 setUnsized = coerce
 
-
 data GenList (g :: [Type]) where
   Nil :: GenList '[]
   (:@) :: Gen a -> GenList g -> GenList (a ': g)
@@ -302,6 +301,15 @@ setGenerators gens (Options _) = Options gens
 
 type family SetGens (g :: [Type]) opts
 type instance SetGens g (Options s _g) = Options s g
+
+#if __GLASGOW_HASKELL__ >= 800
+-- | Available only for @base >= 4.9@.
+newtype Field (s :: Symbol) a = Field { unField :: a }
+
+field :: proxy s -> a -> Field s a
+field _ = Field
+#endif
+
 
 -- | Generic Arbitrary
 class GA opts f where
@@ -354,15 +362,14 @@ class GAProduct' opts f where
 instance GAProduct' opts U1 where
   gaProduct' _ = pure U1
 
-instance (HasGenerators opts, ArbitraryOr (GeneratorsOf opts) c)
-  => GAProduct' opts (K1 i c) where
-  gaProduct' opts = fmap K1 (arbitraryOr (generators opts))
+
+instance (HasGenerators opts, ArbitraryOr (GeneratorsOf opts) (SelectorName d) c)
+  => GAProduct' opts (S1 d (K1 i c)) where
+  gaProduct' opts = fmap (M1 . K1) (arbitraryOr sel (generators opts))
+    where sel = Proxy :: Proxy (SelectorName d)
 
 instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
   gaProduct' = (liftA2 . liftA2) (:*:) gaProduct' gaProduct'
-
-instance GAProduct' opts f => GAProduct' opts (M1 i c f) where
-  gaProduct' = (fmap . fmap) M1 gaProduct'
 
 
 type family Arity f :: Nat where
@@ -370,17 +377,27 @@ type family Arity f :: Nat where
   Arity (M1 _i _c _f) = 1
 
 
-class ArbitraryOr (g :: [Type]) a where
-  arbitraryOr :: GenList g -> Gen a
+class ArbitraryOr (g :: [Type]) (sel :: Maybe Symbol) a where
+  arbitraryOr :: proxy sel -> GenList g -> Gen a
 
-instance {-# INCOHERENT #-} ArbitraryOr (a ': g) a where
-  arbitraryOr (gen :@ _) = gen
+instance {-# INCOHERENT #-} ArbitraryOr (a ': g) sel a where
+  arbitraryOr _ (gen :@ _) = gen
 
-instance {-# OVERLAPPABLE #-} ArbitraryOr g a => ArbitraryOr (b ': g) a where
-  arbitraryOr (_ :@ gens) = arbitraryOr gens
+instance {-# OVERLAPPABLE #-} ArbitraryOr g sel a => ArbitraryOr (b ': g) sel a where
+  arbitraryOr sel (_ :@ gens) = arbitraryOr sel gens
 
-instance Arbitrary a => ArbitraryOr '[] a where
-  arbitraryOr Nil = arbitrary
+instance Arbitrary a => ArbitraryOr '[] sel a where
+  arbitraryOr _ Nil = arbitrary
+
+#if __GLASGOW_HASKELL__ >= 800
+instance {-# INCOHERENT #-} ArbitraryOr (Field n a ': g) ('Just n) a where
+  arbitraryOr _ (gen :@ _) = coerce gen
+
+type family SelectorName (d :: Meta) :: Maybe Symbol
+type instance SelectorName (MetaSel mn su ss ds) = mn
+#else
+type SelectorName d = Nothing
+#endif
 
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))
