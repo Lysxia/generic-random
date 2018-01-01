@@ -69,13 +69,14 @@
 -- (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
--- This will not: the first requires an order of constructors different from
--- the definition of the @Tree@ type; the second doesn't have the right number
--- of weights.
+-- This will not.
 --
 -- @
 -- ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
+-- -- Requires an order of constructors different from the definition of the @Tree@ type.
+--
 -- (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
+-- -- Doesn't have the right number of weights.
 -- @
 --
 -- == Ensuring termination
@@ -179,33 +180,45 @@
 --
 -- == Custom generators for some fields
 --
--- It is possible to use custom generators instead of 'arbitrary' to generate
--- field values. For example, imagine that 'String' is meant to represent
--- alphanumerical strings only.
+-- Sometimes, a few fields may need custom generators instead of 'arbitrary'.
+-- For example, imagine here that String is meant to represent
+-- alphanumerical strings only, and that IDs are meant to be nonnegative,
+-- whereas balances can have any sign.
 --
 -- @
 -- data User = User {
---   userName :: 'String',
---   userId :: 'Int'
+--   userName :: String,
+--   userId :: Int,
+--   userBalance :: Int
 --   } deriving 'Generic'
 -- @
 --
--- Situation: the 'Arbitrary' instance for 'String' may generate strings with
--- any unicode characters, alphanumerical or not; using @newtype@ wrappers or
--- passing generators explicitly to properties may be impractical.
+-- - @'Arbitrary' String@ may generate any unicode characters,
+--   alphanumeric or not;
+-- - @'Arbitrary' Int@ may generate negative values;
+-- - using @newtype@ wrappers or passing generators explicitly to properties
+--   may be impractical (the maintenance overhead can be high because the types
+--   are big or change often).
 --
--- The alternative is to declare a (heterogeneous) list of generators to be
--- used when generating fields of the appropriate type...
+-- Using generic-random, the alternative is to declare a (heterogeneous) list
+-- of generators to be used when generating certain fields...
 --
 -- @
--- customGens :: GenList '[String, Int]
+-- customGens :: 'GenList' '['Field' "userId" Int, String]
 -- customGens =
---      (listOf (elements (filter isAlphaNum [minBound .. maxBound])))
---   :@ (getNonNegative <$> arbitrary :: Gen Int)
---   :@ Nil
+--   ('Field' . 'getNonNegative' \<$\> arbitrary) ':@'
+--   ('listOf' ('elements' (filter isAlphaNum [minBound .. maxBound]))) ':@'
+--   'Nil'
 -- @
 --
--- And to use the @genericArbitrary@ variants that accept explicit generators.
+-- And to use the 'genericArbitraryG' and variants that accept those explicit
+-- generators.
+--
+-- - All @String@ fields will use the provided generator of
+--   alphanumeric strings;
+-- - the field @"userId"@ of type @Int@ will use the generator
+--   of nonnegative integers (the 'Field' type is special);
+-- - everything else defaults to 'arbitrary'.
 --
 -- @
 -- instance Arbitrary User where

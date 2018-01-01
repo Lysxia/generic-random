@@ -1,3 +1,5 @@
+{-# OPTIONS_HADDOCK not-home #-}
+
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -87,13 +89,23 @@ genericArbitraryRec = genericArbitraryWith sizedOpts
 --
 -- === Example
 --
--- Overriding generators for 'String' and 'Int' fields.
--- Make sure the types of the generators are non-ambiguous.
+-- > genericArbitraryG customGens (17 % 19 % ())
 --
--- > genericArbitraryG
--- >   (  (filter (/= '\NUL') <$> arbitrary)
--- >   :@ (getNonNegative <$> arbitrary :: Gen Int)
--- >   ) (17 % 19 % ())
+-- where, for example to override generators for 'String' and 'Int' fields,
+--
+-- @
+-- customGens :: 'GenList' '[String, Int]
+-- customGens =
+--   (filter (/= '\NUL') '<$>' arbitrary) ':@'
+--   (getNonNegative '<$>' arbitrary) ':@'
+--   'Nil'
+-- @
+--
+-- === Note on multiple matches
+--
+-- If the list contains multiple matching types for a field @x@ of type @a@
+-- (i.e., either @a@ or @'Field' "x" a@), the generator for the first
+-- match will be picked.
 genericArbitraryG
   :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a))
   => GenList g
@@ -104,6 +116,7 @@ genericArbitraryG gs = genericArbitraryWith opts
     opts = setGenerators gs unsizedOpts
 
 -- | 'genericArbitraryU' with explicit generators.
+-- See also 'genericArbitraryG'.
 genericArbitraryUG
   :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), UniformWeight_ (Rep a))
   => GenList g
@@ -111,6 +124,7 @@ genericArbitraryUG
 genericArbitraryUG gs = genericArbitraryG gs uniform
 
 -- | 'genericArbitrarySingle' with explicit generators.
+-- See also 'genericArbitraryG'.
 genericArbitrarySingleG
   :: (Generic a, GA (SetGens g UnsizedOpts) (Rep a), Weights_ (Rep a) ~ L c0)
   => GenList g
@@ -118,6 +132,7 @@ genericArbitrarySingleG
 genericArbitrarySingleG = genericArbitraryUG
 
 -- | 'genericArbitraryRec' with explicit generators.
+-- See also 'genericArbitraryG'.
 genericArbitraryRecG
   :: (Generic a, GA (SetGens g SizedOpts) (Rep a))
   => GenList g
@@ -280,6 +295,7 @@ setSized = coerce
 setUnsized :: Options s g -> Options 'Unsized g
 setUnsized = coerce
 
+-- | Heterogeneous list of generators.
 data GenList (g :: [Type]) where
   Nil :: GenList '[]
   (:@) :: Gen a -> GenList g -> GenList (a ': g)
@@ -303,9 +319,13 @@ type family SetGens (g :: [Type]) opts
 type instance SetGens g (Options s _g) = Options s g
 
 #if __GLASGOW_HASKELL__ >= 800
--- | Available only for @base >= 4.9@.
+-- | A marker for a generator which overrides a specific field
+-- named @s@.
+--
+-- /Available only for @base >= 4.9@./
 newtype Field (s :: Symbol) a = Field { unField :: a }
 
+-- | 'Field' constructor with the field name given via a proxy.
 field :: proxy s -> a -> Field s a
 field _ = Field
 #endif

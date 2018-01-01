@@ -13,24 +13,24 @@ module Generic.Random
     genericArbitrary
   , genericArbitraryU
   , genericArbitrarySingle
+  , genericArbitraryRec
   , genericArbitrary'
   , genericArbitraryU'
-  , genericArbitraryRec
   , genericArbitraryG
   , genericArbitraryUG
   , genericArbitrarySingleG
   , genericArbitraryRecG
   , genericArbitraryWith
 
+    -- * Base cases for recursive types
+  , withBaseCase
+  , BaseCase (..)
+
     -- * Specifying finite distributions
   , Weights
   , W
   , (%)
   , uniform
-
-    -- * Base cases for recursive types
-  , withBaseCase
-  , BaseCase (..)
 
     -- * Full options
   , Options ()
@@ -47,6 +47,7 @@ module Generic.Random
   , field
 #endif
   , setGenerators
+
   ) where
 
 import Generic.Random.Internal.BaseCase

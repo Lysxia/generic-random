@@ -2,7 +2,7 @@ https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
 # 1.1.0.0
 
-- Add option to specify custom generators for certain types of fields,
+- Add option to specify custom generators for certain fields,
   overriding Arbitrary instances
   + Add `genericArbitraryG`, `genericArbitraryUG`, `genericArbitrarySingleG`,
     `genericArbitraryRecG`
