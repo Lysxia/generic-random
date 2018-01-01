@@ -425,7 +425,7 @@ instance {-# INCOHERENT #-} ArbitraryOr (Field n a ': g) ('Just n) a where
 type family SelectorName (d :: Meta) :: Maybe Symbol
 type instance SelectorName (MetaSel mn su ss ds) = mn
 #else
-type SelectorName d = Nothing
+type SelectorName d = (Nothing :: Maybe Symbol)
 #endif
 
 
