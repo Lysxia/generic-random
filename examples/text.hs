@@ -6,10 +6,12 @@
 -- see https://github.com/lpsmith/postgresql-simple/issues/223
 -- so applications may want to generate data without them.
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-import Data.Text (Text, pack, unpack)
+import Data.Char (isAlphaNum)
+import Data.Text as T (Text, pack, unpack, null)
 import GHC.Generics (Generic)
 import Test.QuickCheck
 
@@ -19,15 +21,20 @@ instance Arbitrary Text where
   arbitrary = pack <$> arbitrary
   shrink = fmap pack . shrink . unpack
 
-data R = R
-  { name :: Text
-  , address :: Text
+data R = R                    -- Two constraints:
+  { name :: Text              -- names and
+  , address :: Text           -- addresses don't contain '\NUL'
+  , id_ :: Text               -- IDs are alphanumeric
   } deriving (Show, Generic)
 
 instance Arbitrary R where
   arbitrary = genericArbitrarySingleG gens
     where
-      gens = (pack . filter (/= '\NUL') <$> arbitrary) :@ Nil
+      gens =
+        (Field . pack . filter isAlphaNum <$> scale (* 5) arbitrary
+          :: Gen (Field "id_" Text)) :@
+        (pack . filter (/= '\NUL') <$> arbitrary) :@
+        Nil
 
   shrink = genericShrink
 
@@ -41,6 +48,9 @@ main :: IO ()
 main = do
   sample (arbitrary :: Gen R)
   let prop_nameNullFree r = all (/= '\NUL') (unpack (name r))
+      prop_idAlpha r = all isAlphaNum (unpack (id_ r))
       qc prop = quickCheckWith stdArgs{maxSuccess = 1000} prop
   qc prop_nameNullFree
+  qc prop_idAlpha
   qc $ expectFailure $ \(Bugged r) -> prop_nameNullFree r
+  qc $ expectFailure $ \(Bugged r) -> prop_idAlpha r
