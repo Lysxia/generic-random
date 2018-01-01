@@ -17,6 +17,9 @@
 
 module Generic.Random.Internal.Generic where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative(..))
+#endif
 import Control.Applicative (Alternative(..), liftA2)
 import Data.Coerce (coerce)
 #if __GLASGOW_HASKELL__ >= 800
@@ -32,7 +35,7 @@ import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
 import Test.QuickCheck (Arbitrary(..), Gen, choose, resize, sized)
 
 #if __GLASGOW_HASKELL__ < 800
-type Type = *
+#define Type *
 #endif
 
 -- * Random generators
@@ -266,7 +269,7 @@ type UnsizedOpts = (Options 'Unsized '[] :: Type)
 type SizedOpts = (Options 'Sized '[] :: Type)
 
 type family SizingOf opts :: Sizing
-type instance SizingOf (Options s _) = s
+type instance SizingOf (Options s _g) = s
 
 proxySizing :: opts -> Proxy (SizingOf opts)
 proxySizing _ = Proxy
@@ -285,7 +288,7 @@ data GenList (g :: [Type]) where
 infixr 3 :@
 
 type family GeneratorsOf opts :: [Type]
-type instance GeneratorsOf (Options _ g) = g
+type instance GeneratorsOf (Options _s g) = g
 
 class HasGenerators opts where
   generators :: opts -> GenList (GeneratorsOf opts)
