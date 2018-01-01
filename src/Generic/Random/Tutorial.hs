@@ -176,6 +176,41 @@
 --     'genericArbitraryRec' (1 '%' 2 '%' 3 '%' ())
 --       \`withBaseCase\` return Leaf1
 -- @
+--
+-- == Custom generators for some fields
+--
+-- It is possible to use custom generators instead of 'arbitrary' to generate
+-- field values. For example, imagine that 'String' is meant to represent
+-- alphanumerical strings only.
+--
+-- @
+-- data User = User {
+--   userName :: 'String',
+--   userId :: 'Int'
+--   } deriving 'Generic'
+-- @
+--
+-- Situation: the 'Arbitrary' instance for 'String' may generate strings with
+-- any unicode characters, alphanumerical or not; using @newtype@ wrappers or
+-- passing generators explicitly to properties may be impractical.
+--
+-- The alternative is to declare a (heterogeneous) list of generators to be
+-- used when generating fields of the appropriate type...
+--
+-- @
+-- customGens :: GenList '[String, Int]
+-- customGens =
+--      (listOf (elements (filter isAlphaNum [minBound .. maxBound])))
+--   :@ (getNonNegative <$> arbitrary :: Gen Int)
+--   :@ Nil
+-- @
+--
+-- And to use the @genericArbitrary@ variants that accept explicit generators.
+--
+-- @
+-- instance Arbitrary User where
+--   arbitrary = 'genericArbitrarySingleG' customGens
+-- @
 
 module Generic.Random.Tutorial () where
 
