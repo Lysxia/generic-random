@@ -25,3 +25,15 @@ executable text-example
     text,
     generic-random
   default-language: Haskell2010
+
+executable tour-example
+  main-is: tour.hs
+  ghc-options: -Wall
+  if impl(ghc < 7.10)
+    ghc-options: -fcontext-stack=30
+  build-depends:
+    base,
+    QuickCheck,
+    text,
+    generic-random
+  default-language: Haskell2010
