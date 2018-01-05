@@ -3,6 +3,7 @@
 -- For more information:
 --
 -- - "Generic.Random.Tutorial"
+-- - http://blog.poisson.chat/posts/2018-01-05-generic-random-tour.html
 -- - https://byorgey.wordpress.com/2016/09/20/the-generic-random-library-part-1-simple-generic-arbitrary-instances/
 
 {-# LANGUAGE CPP #-}
