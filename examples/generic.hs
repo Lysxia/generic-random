@@ -12,7 +12,7 @@
 
 import GHC.Generics (Generic)
 import Test.QuickCheck
-import Generic.Random.Generic
+import Generic.Random
 
 data Tree a = Leaf | Node (Tree a) a (Tree a)
   deriving (Show, Generic)

@@ -11,7 +11,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 import Data.Char (isAlphaNum)
-import Data.Text as T (Text, pack, unpack, null)
+import Data.Text as T (Text, pack, unpack)
 import GHC.Generics (Generic)
 import Test.QuickCheck
 

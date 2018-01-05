@@ -16,7 +16,7 @@ executable generic-example
 
 executable text-example
   main-is: text.hs
-  ghc-options: -Wall
+  ghc-options: -Wall -Wno-orphans -Wno-unused-top-binds
   if impl(ghc < 7.10)
     ghc-options: -fcontext-stack=30
   build-depends:
@@ -28,7 +28,7 @@ executable text-example
 
 executable tour-example
   main-is: tour.hs
-  ghc-options: -Wall
+  ghc-options: -Wall -Wno-orphans -Wno-unused-imports
   if impl(ghc < 7.10)
     ghc-options: -fcontext-stack=30
   build-depends:
