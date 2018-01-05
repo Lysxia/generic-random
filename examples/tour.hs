@@ -1,5 +1,6 @@
 -- Just another toy example
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -31,6 +32,8 @@ instance Arbitrary MyType where
   --   , (4, ThreeThings <$> (Just <$> arbitrary) <*> arbitrary <*> arbitrary)
   --   ]
 
+main :: IO ()
+#ifndef BENCHMODE
 main = do
   -- Print some examples
   sample (arbitrary @MyType)
@@ -39,6 +42,15 @@ main = do
   quickCheck $ \case
     ThreeThings Nothing _ _ -> False
     _ -> True
+#else
+-- Quick and dirty benchmark
+main = do
+  xs <- generate (replicateM 1000000 (arbitrary @MyType))
+  go xs
+ where
+   go [] = print ()
+   go (x : xs) = x `seq` go xs
+#endif
 
 -- Ew. Sorry.
 instance Show a => Show (Bool -> a) where

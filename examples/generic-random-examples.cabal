@@ -37,3 +37,15 @@ executable tour-example
     text,
     generic-random
   default-language: Haskell2010
+
+executable tour-bench
+  main-is: tour.hs
+  ghc-options: -O2
+  ghc-options: -ddump-simpl -dsuppress-all -dno-suppress-module-prefixes
+  cpp-options: -DBENCHMODE
+  build-depends:
+    base,
+    QuickCheck,
+    text,
+    generic-random
+  default-language: Haskell2010
