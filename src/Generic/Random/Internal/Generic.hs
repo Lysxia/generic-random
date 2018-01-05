@@ -1,6 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -271,7 +270,7 @@ instance UniformWeight_ (Rep a) => GUniformWeight a
 
 
 -- | Type-level options for 'GArbitrary'.
-data Options (s :: Sizing) (g :: [Type]) = Options
+newtype Options (s :: Sizing) (g :: [Type]) = Options
   { _generators :: GenList g
   }
 
@@ -346,17 +345,21 @@ instance (Generic a, GA opts (Rep a)) => GArbitrary opts a
 
 instance GA opts f => GA opts (M1 D c f) where
   ga z w n = fmap M1 (ga z w n)
+  {-# INLINE ga #-}
 
 instance (GASum opts f, GASum opts g) => GA opts (f :+: g) where
   ga = gaSum'
+  {-# INLINE ga #-}
 
 instance GAProduct (SizingOf opts) opts f => GA opts (M1 C c f) where
   ga z _ _ = fmap M1 (gaProduct (proxySizing z) z)
+  {-# INLINE ga #-}
 
 gaSum' :: GASum opts f => opts -> Weights_ f -> Int -> Gen (f p)
 gaSum' z w n = do
   i <- choose (0, n-1)
   gaSum z i w
+{-# INLINE gaSum' #-}
 
 class GASum opts f where
   gaSum :: opts -> Int -> Weights_ f -> Gen (f p)
@@ -365,9 +368,11 @@ instance (GASum opts f, GASum opts g) => GASum opts (f :+: g) where
   gaSum z i (N a n b)
     | i < n = fmap L1 (gaSum z i a)
     | otherwise = fmap R1 (gaSum z (i - n) b)
+  {-# INLINE gaSum #-}
 
 instance GAProduct (SizingOf opts) opts f => GASum opts (M1 i c f) where
   gaSum z _ _ = fmap M1 (gaProduct (proxySizing z) z)
+  {-# INLINE gaSum #-}
 
 
 class GAProduct (s :: Sizing) opts f where
@@ -375,14 +380,17 @@ class GAProduct (s :: Sizing) opts f where
 
 instance GAProduct' opts f => GAProduct 'Unsized opts f where
   gaProduct _ = gaProduct'
+  {-# INLINE gaProduct #-}
 
 instance (GAProduct' opts f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
   gaProduct _ opts = sized $ \n -> resize (n `div` arity) (gaProduct' opts)
     where
       arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
+  {-# INLINE gaProduct #-}
 
 instance {-# OVERLAPPING #-} GAProduct 'Sized opts U1 where
   gaProduct _ _ = pure U1
+  {-# INLINE gaProduct #-}
 
 
 class GAProduct' opts f where
@@ -390,15 +398,18 @@ class GAProduct' opts f where
 
 instance GAProduct' opts U1 where
   gaProduct' _ = pure U1
-
+  {-# INLINE gaProduct' #-}
 
 instance (HasGenerators opts, ArbitraryOr (GeneratorsOf opts) (SelectorName d) c)
   => GAProduct' opts (S1 d (K1 i c)) where
   gaProduct' opts = fmap (M1 . K1) (arbitraryOr sel (generators opts))
     where sel = Proxy :: Proxy (SelectorName d)
+  {-# INLINE gaProduct' #-}
 
 instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
-  gaProduct' = (liftA2 . liftA2) (:*:) gaProduct' gaProduct'
+  -- TODO: Why does this inline better than eta-reducing? (GHC-8.2)
+  gaProduct' opts = (liftA2 . liftA2) (:*:) gaProduct' gaProduct' opts
+  {-# INLINE gaProduct' #-}
 
 
 type family Arity f :: Nat where
@@ -411,16 +422,20 @@ class ArbitraryOr (g :: [Type]) (sel :: Maybe Symbol) a where
 
 instance {-# INCOHERENT #-} ArbitraryOr (a ': g) sel a where
   arbitraryOr _ (gen :@ _) = gen
+  {-# INLINE arbitraryOr #-}
 
 instance {-# OVERLAPPABLE #-} ArbitraryOr g sel a => ArbitraryOr (b ': g) sel a where
   arbitraryOr sel (_ :@ gens) = arbitraryOr sel gens
+  {-# INLINE arbitraryOr #-}
 
 instance Arbitrary a => ArbitraryOr '[] sel a where
-  arbitraryOr _ Nil = arbitrary
+  arbitraryOr _ _ = arbitrary
+  {-# INLINE arbitraryOr #-}
 
 #if __GLASGOW_HASKELL__ >= 800
 instance {-# INCOHERENT #-} ArbitraryOr (Field n a ': g) ('Just n) a where
   arbitraryOr _ (gen :@ _) = coerce gen
+  {-# INLINE arbitraryOr #-}
 
 type family SelectorName (d :: Meta) :: Maybe Symbol
 type instance SelectorName (MetaSel mn su ss ds) = mn
