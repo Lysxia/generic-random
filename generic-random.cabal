@@ -31,7 +31,7 @@ library
     Generic.Random.Internal.Generic
     Generic.Random.Tutorial
   build-depends:
-    base >= 4.7 && < 4.11,
+    base >= 4.7 && < 4.12,
     QuickCheck
   default-language:    Haskell2010
   ghc-options: -Wall -fno-warn-name-shadowing
