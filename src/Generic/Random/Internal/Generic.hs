@@ -34,7 +34,7 @@ import GHC.Generics hiding (S)
 import GHC.Generics hiding (S, Arity)
 #endif
 import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
-import Test.QuickCheck (Arbitrary(..), Gen, choose, resize, sized)
+import Test.QuickCheck (Arbitrary(..), Gen, choose, scale)
 
 #if __GLASGOW_HASKELL__ < 800
 #define Type *
@@ -383,7 +383,7 @@ instance GAProduct' opts f => GAProduct 'Unsized opts f where
   {-# INLINE gaProduct #-}
 
 instance (GAProduct' opts f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
-  gaProduct _ opts = sized $ \n -> resize (n `div` arity) (gaProduct' opts)
+  gaProduct _ = scale (`div` arity) . gaProduct'
     where
       arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
   {-# INLINE gaProduct #-}
