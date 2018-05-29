@@ -382,6 +382,11 @@ instance GAProduct' opts f => GAProduct 'Unsized opts f where
   gaProduct _ = gaProduct'
   {-# INLINE gaProduct #-}
 
+-- Single-field constructors: decrease size by 1.
+instance {-# OVERLAPPING #-} GAProduct' opts (S1 d f)
+  => GAProduct 'Sized opts (S1 d f) where
+  gaProduct _ = scale (\n -> max 0 (n-1)) . gaProduct'
+
 instance (GAProduct' opts f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
   gaProduct _ = scale (`div` arity) . gaProduct'
     where
