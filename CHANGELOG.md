@@ -1,5 +1,10 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.2.0.0
+
+- Fix a bug where generators did not decrease the size parameter with
+  single-field constructors.
+
 # 1.1.0.2
 
 - Improved performance
