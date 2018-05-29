@@ -45,6 +45,7 @@ test-suite unit
   Main-is:         Unit.hs
   Build-depends:
       base,
+      deepseq,
       QuickCheck,
       generic-random
   Type: exitcode-stdio-1.0
