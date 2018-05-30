@@ -276,9 +276,12 @@ newtype Options (s :: Sizing) (genList :: Type) = Options
   { _generators :: genList
   }
 
+-- | Default options for unsized generators.
 unsizedOpts :: UnsizedOpts
 unsizedOpts = Options ()
 
+-- | Default options for sized generators.
+-- N.B.: this overrides the list generator.
 sizedOpts :: SizedOpts
 sizedOpts = Options ()
 
@@ -286,8 +289,8 @@ sizedOpts = Options ()
 -- | Whether to decrease the size parameter before generating fields.
 data Sizing = Sized | Unsized
 
-type UnsizedOpts = (Options 'Unsized () :: Type)
-type SizedOpts = (Options 'Sized () :: Type)
+type UnsizedOpts = Options 'Unsized ()
+type SizedOpts = Options 'Sized ()
 
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _g) = s
