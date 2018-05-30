@@ -26,7 +26,6 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Generic.Random
-    Generic.Random.Generic
     Generic.Random.Internal.BaseCase
     Generic.Random.Internal.Generic
     Generic.Random.Tutorial
