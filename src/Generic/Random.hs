@@ -42,16 +42,23 @@ module Generic.Random
   , Sizing (..)
   , setSized
   , setUnsized
-  , GenList (..)
+  , (:+) (..)
 #if __GLASGOW_HASKELL__ >= 800
-  , Field (..)
-  , field
+  , FieldGen (..)
+  , fieldGen
 #endif
+  , Gen1 (..)
+  , Gen1_ (..)
   , setGenerators
 
     -- * Public classes
   , GArbitrary
   , GUniformWeight
+
+    -- * Helpful combinators
+  , listOf'
+  , listOf1'
+  , vectorOf'
   ) where
 
 import Generic.Random.Internal.BaseCase

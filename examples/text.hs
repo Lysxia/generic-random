@@ -31,10 +31,10 @@ instance Arbitrary R where
   arbitrary = genericArbitrarySingleG gens
     where
       gens =
-        (Field . pack . filter isAlphaNum <$> scale (* 5) arbitrary
-          :: Gen (Field "id_" Text)) :@
-        (pack . filter (/= '\NUL') <$> arbitrary) :@
-        Nil
+        (FieldGen (pack . filter isAlphaNum <$> scale (* 5) arbitrary)
+          :: FieldGen "id_" Text) :+
+        (pack . filter (/= '\NUL') <$> arbitrary) :+
+        ()
 
   shrink = genericShrink
 

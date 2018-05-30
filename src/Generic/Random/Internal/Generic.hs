@@ -8,6 +8,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -34,7 +36,7 @@ import GHC.Generics hiding (S)
 import GHC.Generics hiding (S, Arity)
 #endif
 import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
-import Test.QuickCheck (Arbitrary(..), Gen, choose, scale)
+import Test.QuickCheck (Arbitrary(..), Gen, choose, scale, sized, vectorOf)
 
 #if __GLASGOW_HASKELL__ < 800
 #define Type *
@@ -107,8 +109,8 @@ genericArbitraryRec = genericArbitraryWith sizedOpts
 -- (i.e., either @a@ or @'Field' "x" a@), the generator for the first
 -- match will be picked.
 genericArbitraryG
-  :: (GArbitrary (SetGens g UnsizedOpts) a)
-  => GenList g
+  :: (GArbitrary (SetGens genList UnsizedOpts) a)
+  => genList
   -> Weights a
   -> Gen a
 genericArbitraryG gs = genericArbitraryWith opts
@@ -118,24 +120,24 @@ genericArbitraryG gs = genericArbitraryWith opts
 -- | 'genericArbitraryU' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitraryUG
-  :: (GArbitrary (SetGens g UnsizedOpts) a, GUniformWeight a)
-  => GenList g
+  :: (GArbitrary (SetGens genList UnsizedOpts) a, GUniformWeight a)
+  => genList
   -> Gen a
 genericArbitraryUG gs = genericArbitraryG gs uniform
 
 -- | 'genericArbitrarySingle' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitrarySingleG
-  :: (GArbitrary (SetGens g UnsizedOpts) a, Weights_ (Rep a) ~ L c0)
-  => GenList g
+  :: (GArbitrary (SetGens genList UnsizedOpts) a, Weights_ (Rep a) ~ L c0)
+  => genList
   -> Gen a
 genericArbitrarySingleG = genericArbitraryUG
 
 -- | 'genericArbitraryRec' with explicit generators.
 -- See also 'genericArbitraryG'.
 genericArbitraryRecG
-  :: (GArbitrary (SetGens g SizedOpts) a)
-  => GenList g
+  :: (GArbitrary (SetGens genList SizedOpts) a)
+  => genList
   -> Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitraryRecG gs = genericArbitraryWith opts
@@ -270,22 +272,22 @@ instance UniformWeight_ (Rep a) => GUniformWeight a
 
 
 -- | Type-level options for 'GArbitrary'.
-newtype Options (s :: Sizing) (g :: [Type]) = Options
-  { _generators :: GenList g
+newtype Options (s :: Sizing) (genList :: Type) = Options
+  { _generators :: genList
   }
 
 unsizedOpts :: UnsizedOpts
-unsizedOpts = Options Nil
+unsizedOpts = Options ()
 
 sizedOpts :: SizedOpts
-sizedOpts = Options Nil
+sizedOpts = Options ()
 
 
 -- | Whether to decrease the size parameter before generating fields.
 data Sizing = Sized | Unsized
 
-type UnsizedOpts = (Options 'Unsized '[] :: Type)
-type SizedOpts = (Options 'Sized '[] :: Type)
+type UnsizedOpts = (Options 'Unsized () :: Type)
+type SizedOpts = (Options 'Sized () :: Type)
 
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _g) = s
@@ -300,40 +302,81 @@ setUnsized :: Options s g -> Options 'Unsized g
 setUnsized = coerce
 
 -- | Heterogeneous list of generators.
-data GenList (g :: [Type]) where
-  Nil :: GenList '[]
-  (:@) :: Gen a -> GenList g -> GenList (a ': g)
+data a :+ b = a :+ b
 
-infixr 3 :@
+infixr 1 :+
 
-type family GeneratorsOf opts :: [Type]
+
+type family GeneratorsOf opts :: Type
 type instance GeneratorsOf (Options _s g) = g
 
 class HasGenerators opts where
-  generators :: opts -> GenList (GeneratorsOf opts)
+  generators :: opts -> GeneratorsOf opts
 
 instance HasGenerators (Options s g) where
   generators = _generators
 
-setGenerators :: GenList g -> Options s g0 -> Options s g
+setGenerators :: genList -> Options s g0 -> Options s genList
 setGenerators gens (Options _) = Options gens
 
 
-type family SetGens (g :: [Type]) opts
+type family SetGens (g :: Type) opts
 type instance SetGens g (Options s _g) = Options s g
 
 #if __GLASGOW_HASKELL__ >= 800
--- | A marker for a generator which overrides a specific field
--- named @s@.
+-- | A generator which overrides a specific field named @s@.
 --
 -- /Available only for @base >= 4.9@./
-newtype Field (s :: Symbol) a = Field { unField :: a }
+newtype FieldGen (s :: Symbol) a = FieldGen { unFieldGen :: Gen a }
 
 -- | 'Field' constructor with the field name given via a proxy.
-field :: proxy s -> a -> Field s a
-field _ = Field
+fieldGen :: proxy s -> Gen a -> FieldGen s a
+fieldGen _ = FieldGen
 #endif
 
+-- | Generators for containers of kind @* -> *@, parameterized by
+-- the generator for each element.
+newtype Gen1 f = Gen1 { unGen1 :: forall a. Gen a -> Gen (f a) }
+
+-- | Generators for unary type constructors that are not containers.
+newtype Gen1_ f = Gen1_ { unGen1_ :: forall a. Gen (f a) }
+
+-- | An alternative to 'vectorOf' that divides the size parameter by the
+-- length of the list.
+vectorOf' :: Int -> Gen a -> Gen [a]
+vectorOf' 0 = \_ -> pure []
+vectorOf' i = scale (`div` i) . vectorOf i
+
+-- | An alternative to 'listOf' that divides the size parameter by the
+-- length of the list.
+-- The length follows a geometric distribution of parameter
+-- @1/(sqrt size + 1)@.
+listOf' :: Gen a -> Gen [a]
+listOf' g = sized $ \n -> do
+  i <- geom n
+  vectorOf' i g
+
+-- | An alternative to 'listOf1' (nonempty lists) that divides the size
+-- parameter by the length of the list.
+-- The length (minus one) follows a geometric distribution of parameter
+-- @1/(sqrt size + 1)@.
+listOf1' :: Gen a -> Gen [a]
+listOf1' g = liftA2 (:) g (listOf' g)
+
+-- | Geometric distribution of parameter @1/(sqrt n + 1)@ (@n >= 0@).
+geom :: Int -> Gen Int
+geom 0 = pure 0
+geom n = go 0 where
+  n' = fromIntegral n
+  p = 1 / (sqrt n' + 1) :: Double
+  go r = do
+    x <- choose (0, 1)
+    if x < p then
+      pure r
+    else
+      go $! (r + 1)
+
+---
 
 -- | Generic Arbitrary
 class GA opts f where
@@ -405,10 +448,15 @@ instance GAProduct' opts U1 where
   gaProduct' _ = pure U1
   {-# INLINE gaProduct' #-}
 
-instance (HasGenerators opts, ArbitraryOr (GeneratorsOf opts) (SelectorName d) c)
+instance
+  ( HasGenerators opts
+  , ArbitraryOr gs gs (SelectorName d) c
+  , gs ~ GeneratorsOf opts )
   => GAProduct' opts (S1 d (K1 i c)) where
-  gaProduct' opts = fmap (M1 . K1) (arbitraryOr sel (generators opts))
-    where sel = Proxy :: Proxy (SelectorName d)
+  gaProduct' opts = fmap (M1 . K1) (arbitraryOr sel gs gs)
+    where
+      sel = Proxy :: Proxy (SelectorName d)
+      gs = generators opts
   {-# INLINE gaProduct' #-}
 
 instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
@@ -422,32 +470,39 @@ type family Arity f :: Nat where
   Arity (M1 _i _c _f) = 1
 
 
-class ArbitraryOr (g :: [Type]) (sel :: Maybe Symbol) a where
-  arbitraryOr :: proxy sel -> GenList g -> Gen a
+class ArbitraryOr (fullGenList :: Type) (genList :: Type) (sel :: Maybe Symbol) a where
+  arbitraryOr :: proxy sel -> fullGenList -> genList -> Gen a
 
-instance {-# INCOHERENT #-} ArbitraryOr (a ': g) sel a where
-  arbitraryOr _ (gen :@ _) = gen
+instance {-# INCOHERENT #-} ArbitraryOr fg (Gen a :+ g) sel a where
+  arbitraryOr _ _ (gen :+ _) = gen
   {-# INLINE arbitraryOr #-}
 
-instance {-# OVERLAPPABLE #-} ArbitraryOr g sel a => ArbitraryOr (b ': g) sel a where
-  arbitraryOr sel (_ :@ gens) = arbitraryOr sel gens
+instance {-# OVERLAPPABLE #-} ArbitraryOr fg g sel a => ArbitraryOr fg (b :+ g) sel a where
+  arbitraryOr sel fg (_ :+ gens) = arbitraryOr sel fg gens
   {-# INLINE arbitraryOr #-}
 
-instance Arbitrary a => ArbitraryOr '[] sel a where
-  arbitraryOr _ _ = arbitrary
+instance Arbitrary a => ArbitraryOr fg () sel a where
+  arbitraryOr _ _ _ = arbitrary
   {-# INLINE arbitraryOr #-}
 
 #if __GLASGOW_HASKELL__ >= 800
-instance {-# INCOHERENT #-} ArbitraryOr (Field n a ': g) ('Just n) a where
-  arbitraryOr _ (gen :@ _) = coerce gen
+instance {-# INCOHERENT #-} ArbitraryOr fg (FieldGen n a :+ g) ('Just n) a where
+  arbitraryOr _ _ (FieldGen gen :+ _) = gen
   {-# INLINE arbitraryOr #-}
 
 type family SelectorName (d :: Meta) :: Maybe Symbol
-type instance SelectorName (MetaSel mn su ss ds) = mn
+type instance SelectorName ('MetaSel mn su ss ds) = mn
 #else
 type SelectorName d = (Nothing :: Maybe Symbol)
 #endif
 
+instance {-# INCOHERENT #-} ArbitraryOr fg (Gen1_ f :+ g) sel (f a) where
+  arbitraryOr _ _ (Gen1_ gen :+ _) = gen
+
+instance {-# INCOHERENT #-} ArbitraryOr fg fg 'Nothing a
+  => ArbitraryOr fg (Gen1 f :+ g) sel (f a) where
+  arbitraryOr _ fg (Gen1 gen :+ _) = gen (arbitraryOr noSel fg fg)
+    where noSel = Proxy :: Proxy 'Nothing
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))
   deriving Functor

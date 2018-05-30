@@ -7,6 +7,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 import Control.Monad
 import GHC.Generics
@@ -20,8 +21,8 @@ data MyType
   | ThreeThings (Maybe Integer) [()] (Bool -> Word)
   deriving (Show, Generic)
 
-custom :: GenList '[Maybe Integer]
-custom = (Just <$> arbitrary) :@ Nil
+custom :: Gen (Maybe Integer) :+ ()
+custom = (Just <$> arbitrary) :+ ()
 
 instance Arbitrary MyType where
   arbitrary :: Gen MyType
