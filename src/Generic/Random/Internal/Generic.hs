@@ -81,11 +81,13 @@ genericArbitrarySingle = genericArbitraryU
 -- at size 0.
 --
 -- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
+--
+-- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
 genericArbitraryRec
-  :: (GArbitrary SizedOpts a)
+  :: (GArbitrary SizedOptsDef a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
-genericArbitraryRec = genericArbitraryWith sizedOpts
+genericArbitraryRec = genericArbitraryWith sizedOptsDef
 
 -- | 'genericArbitrary' with explicit generators.
 --
@@ -281,9 +283,12 @@ unsizedOpts :: UnsizedOpts
 unsizedOpts = Options ()
 
 -- | Default options for sized generators.
--- N.B.: this overrides the list generator.
 sizedOpts :: SizedOpts
 sizedOpts = Options ()
+
+-- | Default options overriding the list generator using `listOf'`.
+sizedOptsDef :: SizedOptsDef
+sizedOptsDef = Options (Gen1 listOf' :+ ())
 
 
 -- | Whether to decrease the size parameter before generating fields.
@@ -291,6 +296,7 @@ data Sizing = Sized | Unsized
 
 type UnsizedOpts = Options 'Unsized ()
 type SizedOpts = Options 'Sized ()
+type SizedOptsDef = Options 'Sized (Gen1 [] :+ ())
 
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _g) = s

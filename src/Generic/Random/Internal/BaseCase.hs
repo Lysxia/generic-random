@@ -36,8 +36,10 @@ import Generic.Random.Internal.Generic
 -- recursive types, looking for base cases once the size reaches 0.
 --
 -- > genericArbitrary' (17 % 19 % 23 % ()) :: Gen a
+--
+-- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
 genericArbitrary'
-  :: (GArbitrary SizedOpts a, BaseCase a)
+  :: (GArbitrary SizedOptsDef a, BaseCase a)
   => Weights a  -- ^ List of weights for every constructor
   -> Gen a
 genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
@@ -45,8 +47,10 @@ genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 -- | Equivalent to @'genericArbitrary'' 'uniform'@.
 --
 -- > genericArbitraryU :: Gen a
+--
+-- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
 genericArbitraryU'
-  :: (GArbitrary SizedOpts a, BaseCase a, GUniformWeight a)
+  :: (GArbitrary SizedOptsDef a, BaseCase a, GUniformWeight a)
   => Gen a
 genericArbitraryU' = genericArbitrary' uniform
 
