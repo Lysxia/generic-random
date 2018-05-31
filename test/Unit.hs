@@ -43,4 +43,4 @@ eval name g = do
 main :: IO ()
 main = do
   eval "T" (arbitrary :: Gen (T (T Int)))
-  eval "NTree" (resize 13 arbitrary :: Gen NTree)
+  eval "NTree" (arbitrary :: Gen NTree)
