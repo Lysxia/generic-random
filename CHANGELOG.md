@@ -3,7 +3,17 @@ https://github.com/Lysxia/generic-random/blob/master/changelog.md
 # 1.2.0.0
 
 - Fix a bug where generators did not decrease the size parameter with
-  single-field constructors.
+  single-field constructors
+
+- The sized generators now use a custom generator for lists.
+  Use `genericArbitraryRecG ()` to disable that.
+
+- Lists of custom generators are now constructed using `(:+)` instead of
+  `GenList`
+- Rename `Field` to `FieldGen`
+- Add `Gen1`, `Gen1_` (custom generators for unary type constructors)
+- Add `listOf'`, `listOf1'`, `vectorOf'`
+- Remove deprecated module `Generic.Random.Generic`
 
 # 1.1.0.2
 
