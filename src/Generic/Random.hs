@@ -37,6 +37,8 @@ module Generic.Random
   , Options ()
   , SizedOpts
   , sizedOpts
+  , SizedOptsDef
+  , sizedOptsDef
   , UnsizedOpts
   , unsizedOpts
   , Sizing (..)
