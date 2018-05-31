@@ -2,13 +2,13 @@
 -- [QuickCheck](https://hackage.haskell.org/package/QuickCheck)'s
 -- @arbitrary@.
 --
--- == Example
+-- = Example
 --
 -- Define your type.
 --
 -- @
 -- data Tree a = Leaf a | Node (Tree a) (Tree a)
---   deriving 'Generic'
+--   deriving 'GHC.Generics.Generic'
 -- @
 --
 -- Pick an 'arbitrary' implementation, specifying the required distribution of
@@ -16,7 +16,7 @@
 --
 -- @
 -- instance Arbitrary a => Arbitrary (Tree a) where
---   arbitrary = 'genericArbitrary' (8 '%' 9 '%' ())
+--   arbitrary = 'genericArbitrary' (9 '%' 8 '%' ())
 -- @
 --
 -- @arbitrary :: 'Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
@@ -34,7 +34,7 @@
 --     ]
 -- @
 --
--- == Distribution of constructors
+-- = Distribution of constructors
 --
 -- The distribution of constructors can be specified as
 -- a special list of /weights/ in the same order as the data type definition.
@@ -45,7 +45,7 @@
 -- the unit @()@ as the empty list, in the order corresponding to the data type
 -- definition. The uniform distribution can be obtained with 'uniform'.
 --
--- === Uniform distribution
+-- == Uniform distribution
 --
 -- You can specify the uniform distribution (all weights equal) with 'uniform'.
 -- ('genericArbitraryU' is available as a shorthand for
@@ -54,7 +54,7 @@
 -- Note that for many recursive types, a uniform distribution tends to produce
 -- big or even infinite values.
 --
--- === Typed weights
+-- == Typed weights
 --
 -- /GHC 8.0.1 and above only (base ≥ 4.9)./
 --
@@ -66,7 +66,7 @@
 --
 -- @
 -- ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
--- (x '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
+-- ( x              '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
 -- This will not.
@@ -75,113 +75,107 @@
 -- ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
 -- -- Requires an order of constructors different from the definition of the @Tree@ type.
 --
--- (x '%' y '%' z '%' ()) :: 'Weights' (Tree a)
+-- ( x              '%' y '%' z '%' ()) :: 'Weights' (Tree a)
 -- -- Doesn't have the right number of weights.
 -- @
 --
--- == Ensuring termination
+-- = Ensuring termination
 --
 -- As mentioned earlier, one must be careful with recursive types
 -- to avoid producing extremely large values.
+-- The alternative generator 'genericArbitraryRec' decreases the size
+-- parameter at every call to keep values at reasonable sizes,
+-- to be used together with 'withBaseCase'.
 --
--- The alternative generator 'genericArbitrary'' implements a simple strategy to keep
--- values at reasonable sizes: the size parameter of 'Gen' is divided among the
--- fields of the chosen constructor. When it reaches zero, the generator
--- selects a small term of the given type. This generally ensures that the
--- number of constructors remains close to the initial size parameter passed to
--- 'Gen'.
+-- For example, we may provide a base case consisting of only `Leaf`:
 --
 -- @
--- 'genericArbitrary'' (x1 '%' ... '%' xn '%' ())
+-- instance Arbitrary a => Arbitrary (Tree a) where
+--   arbitrary = 'genericArbitraryRec' (1 '%' 2 '%' ())
+--     ``withBaseCase`` (Leaf \<$\> arbitrary)
 -- @
 --
--- Here is an example with nullary constructors:
+-- That is equivalent to the following definition. Note the
+-- 'Test.QuickCheck.resize' modifier.
 --
 -- @
--- data Bush = Leaf1 | Leaf2 | Node3 Bush Bush Bush
---   deriving Generic
---
--- instance Arbitrary Bush where
---   arbitrary = 'genericArbitrary'' (1 '%' 2 '%' 3 '%' ())
+-- arbitrary :: Arbitrary a => Gen (Tree a)
+-- arbitrary = sized $ \\n ->
+--   -- "if" condition from withBaseCase
+--   if n == 0 then
+--     Leaf \<$\> arbitrary
+--   else
+--     -- genericArbitraryRec
+--     frequency
+--       [ (1, resize (max 0 (n - 1)) (Leaf \<$\> arbitrary))
+--       , (2, resize (n \`div\` 2)     (Node \<$\> arbitrary \<*\> arbitrary))
+--       ]
 -- @
 --
--- Here, 'genericArbitrary'' is equivalent to:
+-- The resizing strategy is as follows:
+-- the size parameter of 'Gen' is divided among the fields of the chosen
+-- constructor, or decreases by one if the constructor is unary.
+-- @'withBaseCase' defG baseG@ is equal to @defG@ as long as the size parameter
+-- is nonzero, and it becomes @baseG@ once the size reaches zero.
+-- This combination generally ensures that the number of constructors remains
+-- close to the initial size parameter passed to 'Gen'.
+--
+-- == Automatic base case discovery
+--
+-- In some situations, generic-random can also construct base cases automatically.
+-- This works best with fully concrete types (no type parameters).
 --
 -- @
--- 'genericArbitrary'' :: 'Weights' Bush -> Gen Bush
--- 'genericArbitrary'' (x '%' y '%' z '%' ()) =
---   sized $ \\n ->
---     if n == 0 then
---       -- If the size parameter is zero, only nullary alternatives are kept.
---       elements [Leaf1, Leaf2]
---     else
---       frequency
---         [ (x, return Leaf1)
---         , (y, return Leaf2)
---         , (z, resize (n \`div\` 3) node)  -- 3 because Node3 is 3-ary
---         ]
---   where
---     node = Node3 \<$\> arbitrary \<*\> arbitrary \<*\> arbitrary
+-- {-\# LANGUAGE FlexibleInstances #-}
+--
+-- instance Arbitrary (Tree ()) where
+--   arbitrary = 'genericArbitrary'' (1 '%' 2 '%' ())
 -- @
 --
--- If we want to generate a value of type @Tree ()@, there is a
--- value of depth 1 that we can use to end recursion: @Leaf ()@.
+-- The above instance will infer the value @Leaf ()@ as a base case.
 --
--- @
--- 'genericArbitrary'' :: 'Weights' (Tree ()) -> Gen (Tree ())
--- 'genericArbitrary'' (x '%' y '%' ()) =
---   sized $ \\n ->
---     if n == 0 then
---       return (Leaf ())
---     else
---       frequency
---         [ (x, Leaf \<$\> arbitrary)
---         , (y, resize (n \`div\` 2) $ Node \<$\> arbitrary \<*\> arbitrary)
---         ]
--- @
---
--- Because the argument of @Tree@ must be inspected in order to discover
--- values of type @Tree ()@, we incur some extra constraints if we want
--- polymorphism.
+-- To discover values of type @Tree a@, we must inspect the type argument @a@,
+-- thus we incur some extra constraints if we want polymorphism.
+-- It is preferrable to apply the type class 'BaseCase' to the instance head
+-- (@Tree a@) as follows, as it doesn't reduce to something worth seeing.
 --
 -- @
 -- {-\# LANGUAGE FlexibleContexts, UndecidableInstances \#-}
 --
--- instance (Arbitrary a, BaseCase (Tree a))
+-- instance (Arbitrary a, 'BaseCase' (Tree a))
 --   => Arbitrary (Tree a) where
 --   arbitrary = 'genericArbitrary'' (1 '%' 2 '%' ())
 -- @
 --
--- By default, the 'BaseCase' type class looks for all values of minimal depth
--- (constructors have depth @1 + max(0, depths of fields)@).
+-- The 'BaseCase' type class finds values of minimal depth,
+-- where the depth of a constructor is defined as @1 + max(0, depths of fields)@,
+-- e.g., @Leaf ()@ has depth 2.
 --
--- This can easily be overriden by declaring a specialized 'BaseCase' instance,
--- such as this one:
+-- == Note about lists
 --
--- @
--- instance Arbitrary a => 'BaseCase' (Tree a) where
---   'baseCase' = oneof [leaf, simpleNode]
---     where
---       leaf = Leaf \<$\> arbitrary
---       simpleNode = Node \<$\> leaf \<*\> leaf
--- @
+-- The @Arbitrary@ instance for lists can be problematic for this way
+-- of implementing recursive sized generators, because they make a lot of
+-- recursive calls to 'arbitrary' without decreasing the size parameter.
+-- Hence, as a default, 'genericArbitraryRec' also detects fields which are
+-- lists to replace 'arbitrary' with a different generator that divides
+-- the size parameter by the length of the list before generating each
+-- eleement. This uses the customizable mechanism shown in the next section.
 --
--- An alternative base case can also be specified directly in the `arbitrary`
--- definition with the 'withBaseCase' combinator.
---
--- 'genericArbitraryRec' is a variant of 'genericArbitrary'' with no base case.
+-- If you really want to use 'arbitrary' for lists in the derived instances,
+-- substitute @'genericArbitraryRec'@ with @'genericArbitraryRecG' ()@.
 --
 -- @
--- instance Arbitrary Bush where
---   arbitrary =
---     'genericArbitraryRec' (1 '%' 2 '%' 3 '%' ())
---       \`withBaseCase\` return Leaf1
+-- arbitrary = 'genericArbitraryRecG' ()
+--   ``withBaseCase`` baseGen
 -- @
 --
--- == Custom generators for some fields
+-- Some combinators are available for further tweaking: 'listOf'', 'listOf1'',
+-- 'vectorOf''.
+--
+-- = Custom generators for some fields
 --
 -- Sometimes, a few fields may need custom generators instead of 'arbitrary'.
--- For example, imagine here that String is meant to represent
+-- For example, imagine here that @String@ is meant to represent
 -- alphanumerical strings only, and that IDs are meant to be nonnegative,
 -- whereas balances can have any sign.
 --
@@ -190,42 +184,53 @@
 --   userName :: String,
 --   userId :: Int,
 --   userBalance :: Int
---   } deriving 'Generic'
+--   } deriving 'GHC.Generics.Generic'
 -- @
 --
--- - @'Arbitrary' String@ may generate any unicode characters,
+-- - @'Test.QuickCheck.Arbitrary' String@ may generate any unicode character,
 --   alphanumeric or not;
--- - @'Arbitrary' Int@ may generate negative values;
+-- - @'Test.QuickCheck.Arbitrary' Int@ may generate negative values;
 -- - using @newtype@ wrappers or passing generators explicitly to properties
 --   may be impractical (the maintenance overhead can be high because the types
 --   are big or change often).
 --
--- Using generic-random, the alternative is to declare a (heterogeneous) list
--- of generators to be used when generating certain fields...
+-- Using generic-random, we can declare a (heterogeneous) list of generators to
+-- be used when generating certain fields (remember to end lists with @()@).
 --
 -- @
--- customGens :: 'GenList' '['Field' "userId" Int, String]
+-- customGens :: 'FieldGen' "userId" Int ':+' Gen String ':+' ()
 -- customGens =
---   ('Field' . 'getNonNegative' \<$\> arbitrary) ':@'
---   ('listOf' ('elements' (filter isAlphaNum [minBound .. maxBound]))) ':@'
---   'Nil'
+--   ('FieldGen' . 'getNonNegative' \<$\> arbitrary) ':+'
+--   ('listOf' ('elements' (filter isAlphaNum [minBound .. maxBound]))) ':+'
+--   ()
 -- @
 --
--- And to use the 'genericArbitraryG' and variants that accept those explicit
--- generators.
+-- Now we use the 'genericArbitraryG' combinator and other @G@-suffixed
+-- variants that accept those explicit generators.
 --
 -- - All @String@ fields will use the provided generator of
 --   alphanumeric strings;
 -- - the field @"userId"@ of type @Int@ will use the generator
---   of nonnegative integers (the 'Field' type is special);
+--   of nonnegative integers;
 -- - everything else defaults to 'arbitrary'.
 --
 -- @
 -- instance Arbitrary User where
 --   arbitrary = 'genericArbitrarySingleG' customGens
 -- @
+--
+-- The custom generator modifiers that can occur in the list are:
+--
+-- - 'Test.QuickCheck.Gen': a generator for a specific type;
+-- - 'FieldGen': a generator for a field name and type;
+-- - 'Gen1': a generator for containers, parameterized by a generator
+--   for individual elements;
+-- - 'Gen1_': a generator for unary type constructors that are not
+--   containers.
+--
+-- Suggestions to add more modifiers or otherwise improve this tutorial are welcome!
+-- <https://github.com/Lysxia/generic-random/issues The issue tracker is this way.>
 
 module Generic.Random.Tutorial () where
 
-import GHC.Generics
 import Generic.Random
