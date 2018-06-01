@@ -98,11 +98,11 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 -- where, for example to override generators for 'String' and 'Int' fields,
 --
 -- @
--- customGens :: 'GenList' '[String, Int]
+-- customGens :: Gen String ':+' Gen Int
 -- customGens =
---   (filter (/= '\NUL') '<$>' arbitrary) ':@'
---   (getNonNegative '<$>' arbitrary) ':@'
---   'Nil'
+--   (filter (/= '\NUL') '<$>' arbitrary) ':+'
+--   (getNonNegative '<$>' arbitrary) ':+'
+--   ()
 -- @
 --
 -- === Note on multiple matches
