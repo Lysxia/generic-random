@@ -118,7 +118,7 @@
 -- @'withBaseCase' defG baseG@ is equal to @defG@ as long as the size parameter
 -- is nonzero, and it becomes @baseG@ once the size reaches zero.
 -- This combination generally ensures that the number of constructors remains
--- close to the initial size parameter passed to 'Gen'.
+-- bounded by the initial size parameter passed to 'Gen'.
 --
 -- == Automatic base case discovery
 --
@@ -159,7 +159,7 @@
 -- Hence, as a default, 'genericArbitraryRec' also detects fields which are
 -- lists to replace 'arbitrary' with a different generator that divides
 -- the size parameter by the length of the list before generating each
--- eleement. This uses the customizable mechanism shown in the next section.
+-- element. This uses the customizable mechanism shown in the next section.
 --
 -- If you really want to use 'arbitrary' for lists in the derived instances,
 -- substitute @'genericArbitraryRec'@ with @'genericArbitraryRecG' ()@.
@@ -187,6 +187,8 @@
 --   } deriving 'GHC.Generics.Generic'
 -- @
 --
+-- A naive approach has the following problems:
+--
 -- - @'Test.QuickCheck.Arbitrary' String@ may generate any unicode character,
 --   alphanumeric or not;
 -- - @'Test.QuickCheck.Arbitrary' Int@ may generate negative values;
@@ -195,7 +197,8 @@
 --   are big or change often).
 --
 -- Using generic-random, we can declare a (heterogeneous) list of generators to
--- be used when generating certain fields (remember to end lists with @()@).
+-- be used instead of 'arbitrary' when generating certain fields (remember to
+-- end lists with @()@).
 --
 -- @
 -- customGens :: 'FieldGen' "userId" Int ':+' Gen String ':+' ()
