@@ -46,7 +46,7 @@ genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 
 -- | Equivalent to @'genericArbitrary'' 'uniform'@.
 --
--- > genericArbitraryU :: Gen a
+-- > genericArbitraryU' :: Gen a
 --
 -- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
 genericArbitraryU'
