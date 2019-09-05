@@ -11,7 +11,7 @@
 --   deriving 'GHC.Generics.Generic'
 -- @
 --
--- Pick an 'arbitrary' implementation, specifying the required distribution of
+-- Pick an 'Test.QuickCheck.arbitrary' implementation, specifying the required distribution of
 -- data constructors.
 --
 -- @
@@ -19,7 +19,7 @@
 --   arbitrary = 'genericArbitrary' (9 '%' 8 '%' ())
 -- @
 --
--- @arbitrary :: 'Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
+-- @arbitrary :: 'Test.QuickCheck.Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
 -- @Node@ with probability 8\/17, and recursively fills their fields with
 -- @arbitrary@.
 --
@@ -89,7 +89,7 @@
 -- parameter at every call to keep values at reasonable sizes,
 -- to be used together with 'withBaseCase'.
 --
--- For example, we may provide a base case consisting of only `Leaf`:
+-- For example, we may provide a base case consisting of only @Leaf@:
 --
 -- @
 -- instance Arbitrary a => Arbitrary (Tree a) where
@@ -115,12 +115,12 @@
 -- @
 --
 -- The resizing strategy is as follows:
--- the size parameter of 'Gen' is divided among the fields of the chosen
--- constructor, or decreases by one if the constructor is unary.
+-- the size parameter of 'Test.QuickCheck.Gen' is divided among the fields of
+-- the chosen constructor, or decreases by one if the constructor is unary.
 -- @'withBaseCase' defG baseG@ is equal to @defG@ as long as the size parameter
 -- is nonzero, and it becomes @baseG@ once the size reaches zero.
 -- This combination generally ensures that the number of constructors remains
--- bounded by the initial size parameter passed to 'Gen'.
+-- bounded by the initial size parameter passed to 'Test.QuickCheck.Gen'.
 --
 -- == Automatic base case discovery
 --
@@ -157,13 +157,13 @@
 --
 -- The @Arbitrary@ instance for lists can be problematic for this way
 -- of implementing recursive sized generators, because they make a lot of
--- recursive calls to 'arbitrary' without decreasing the size parameter.
+-- recursive calls to 'Test.QuickCheck.arbitrary' without decreasing the size parameter.
 -- Hence, as a default, 'genericArbitraryRec' also detects fields which are
--- lists to replace 'arbitrary' with a different generator that divides
+-- lists to replace 'Test.QuickCheck.arbitrary' with a different generator that divides
 -- the size parameter by the length of the list before generating each
 -- element. This uses the customizable mechanism shown in the next section.
 --
--- If you really want to use 'arbitrary' for lists in the derived instances,
+-- If you really want to use 'Test.QuickCheck.arbitrary' for lists in the derived instances,
 -- substitute @'genericArbitraryRec'@ with @'genericArbitraryRecG' ()@.
 --
 -- @
@@ -176,7 +176,7 @@
 --
 -- = Custom generators for some fields
 --
--- Sometimes, a few fields may need custom generators instead of 'arbitrary'.
+-- Sometimes, a few fields may need custom generators instead of 'Test.QuickCheck.arbitrary'.
 -- For example, imagine here that @String@ is meant to represent
 -- alphanumerical strings only, and that IDs are meant to be nonnegative,
 -- whereas balances can have any sign.
@@ -199,14 +199,14 @@
 --   are big or change often).
 --
 -- Using generic-random, we can declare a (heterogeneous) list of generators to
--- be used instead of 'arbitrary' when generating certain fields (remember to
+-- be used instead of 'Test.QuickCheck.arbitrary' when generating certain fields (remember to
 -- end lists with @()@).
 --
 -- @
 -- customGens :: 'FieldGen' "userId" Int ':+' Gen String ':+' ()
 -- customGens =
---   ('FieldGen' . 'getNonNegative' \<$\> arbitrary) ':+'
---   ('listOf' ('elements' (filter isAlphaNum [minBound .. maxBound]))) ':+'
+--   ('FieldGen' . 'Test.QuickCheck.getNonNegative' \<$\> arbitrary) ':+'
+--   ('Test.QuickCheck.listOf' ('Test.QuickCheck.elements' (filter isAlphaNum [minBound .. maxBound]))) ':+'
 --   ()
 -- @
 --
@@ -217,7 +217,7 @@
 --   alphanumeric strings;
 -- - the field @"userId"@ of type @Int@ will use the generator
 --   of nonnegative integers;
--- - everything else defaults to 'arbitrary'.
+-- - everything else defaults to 'Test.QuickCheck.arbitrary'.
 --
 -- @
 -- instance Arbitrary User where
@@ -235,6 +235,8 @@
 --
 -- Suggestions to add more modifiers or otherwise improve this tutorial are welcome!
 -- <https://github.com/Lysxia/generic-random/issues The issue tracker is this way.>
+
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Generic.Random.Tutorial () where
 

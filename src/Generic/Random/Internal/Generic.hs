@@ -31,9 +31,9 @@ import Data.Kind (Type)
 #endif
 import Data.Proxy (Proxy(..))
 #if __GLASGOW_HASKELL__ >= 800
-import GHC.Generics hiding (S)
+import GHC.Generics hiding (S, prec)
 #else
-import GHC.Generics hiding (S, Arity)
+import GHC.Generics hiding (S, Arity, prec)
 #endif
 import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
 import Test.QuickCheck (Arbitrary(..), Gen, choose, scale, sized, vectorOf)
@@ -108,7 +108,7 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 -- === Note on multiple matches
 --
 -- If the list contains multiple matching types for a field @x@ of type @a@
--- (i.e., either @a@ or @'Field' "x" a@), the generator for the first
+-- (i.e., either @a@ or @'FieldGen' "x" a@), the generator for the first
 -- match will be picked.
 genericArbitraryG
   :: (GArbitrary (SetGens genList UnsizedOpts) a)
@@ -299,7 +299,7 @@ unsizedOpts = Options ()
 sizedOpts :: SizedOpts
 sizedOpts = Options ()
 
--- | Default options overriding the list generator using `listOf'`.
+-- | Default options overriding the list generator using 'listOf''.
 sizedOptsDef :: SizedOptsDef
 sizedOptsDef = Options (Gen1 listOf' :+ ())
 
@@ -351,7 +351,7 @@ type instance SetGens g (Options s _g) = Options s g
 -- /Available only for @base >= 4.9@./
 newtype FieldGen (s :: Symbol) a = FieldGen { unFieldGen :: Gen a }
 
--- | 'Field' constructor with the field name given via a proxy.
+-- | 'FieldGen' constructor with the field name given via a proxy.
 fieldGen :: proxy s -> Gen a -> FieldGen s a
 fieldGen _ = FieldGen
 #endif
@@ -369,8 +369,8 @@ vectorOf' :: Int -> Gen a -> Gen [a]
 vectorOf' 0 = \_ -> pure []
 vectorOf' i = scale (`div` i) . vectorOf i
 
--- | An alternative to 'listOf' that divides the size parameter by the
--- length of the list.
+-- | An alternative to 'Test.QuickCheck.listOf' that divides the size parameter
+-- by the length of the list.
 -- The length follows a geometric distribution of parameter
 -- @1/(sqrt size + 1)@.
 listOf' :: Gen a -> Gen [a]
@@ -378,8 +378,8 @@ listOf' g = sized $ \n -> do
   i <- geom n
   vectorOf' i g
 
--- | An alternative to 'listOf1' (nonempty lists) that divides the size
--- parameter by the length of the list.
+-- | An alternative to 'Test.QuickCheck.listOf1' (nonempty lists) that divides
+-- the size parameter by the length of the list.
 -- The length (minus one) follows a geometric distribution of parameter
 -- @1/(sqrt size + 1)@.
 listOf1' :: Gen a -> Gen [a]
@@ -533,10 +533,10 @@ instance Applicative Weighted where
   pure a = Weighted (Just ((pure . pure) a, 1))
   Weighted f <*> Weighted a = Weighted $ liftA2 g f a
     where
-      g (f, m) (a, n) =
+      g (f1, m) (a1, n) =
         ( \i ->
             let (j, k) = i `divMod` m
-            in f j <*> a k
+            in f1 j <*> a1 k
         , m * n )
 
 instance Alternative Weighted where
