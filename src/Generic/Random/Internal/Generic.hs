@@ -190,6 +190,9 @@ data Weights a = Weights (Weights_ (Rep a)) Int
 -- @
 -- ((9 :: 'W' \"Leaf\") '%' (8 :: 'W' \"Node\") '%' ())
 -- @
+--
+-- Note: these annotations are only checked on GHC 8.0 or newer. They are
+-- ignored on older GHCs.
 newtype W (c :: Symbol) = W Int deriving Num
 
 -- | A smart constructor to specify a custom distribution.
@@ -216,10 +219,20 @@ type family Prec' w where
   Prec' (Weights a) = Prec (Weights_ (Rep a)) ()
   Prec' (a, Int, r) = Prec a r
 
+-- | A synonym for @(~)@, except on GHC 7.10 and older, where it's the trivial
+-- constraint. See note on 'W'.
+#if __GLASGOW_HASKELL__ >= 800
+class (a ~ b) => a ~. b
+instance (a ~ b) => a ~. b
+#else
+class a ~. b
+instance a ~. b
+#endif
+
 class WeightBuilder' w where
 
   -- | A binary constructor for building up trees of weights.
-  (%) :: W (First' w) -> Prec' w -> w
+  (%) :: (c ~. First' w) => W c -> Prec' w -> w
 
 instance WeightBuilder (Weights_ (Rep a)) => WeightBuilder' (Weights a) where
   w % prec = weights (w %. prec)
@@ -230,7 +243,7 @@ instance WeightBuilder a => WeightBuilder' (a, Int, r) where
 class WeightBuilder a where
   type Prec a r
 
-  (%.) :: W (First a) -> Prec a r -> (a, Int, r)
+  (%.) :: (c ~. First a) => W c -> Prec a r -> (a, Int, r)
 
 infixr 1 %
 
