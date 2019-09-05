@@ -16,4 +16,4 @@ size (N l r) = 1 + size l + size r
 size L = 0
 
 instance Arbitrary T where
-  arbitrary = genericArbitrary (weights (9 % 8 % ()))
+  arbitrary = genericArbitrary (weights ((9 :: W "L") % (8 :: W "N") % ()))

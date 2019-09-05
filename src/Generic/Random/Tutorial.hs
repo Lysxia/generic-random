@@ -56,11 +56,13 @@
 --
 -- == Typed weights
 --
--- /GHC 8.0.1 and above only (base ≥ 4.9)./
+-- /GHC 8.0.1 and above only (base ≥ 4.9). For compatibility, the annotations
+-- are still allowed on older GHC versions, but ignored./
 --
 -- The weights actually have type @'W' \"ConstructorName\"@ (just a newtype
 -- around 'Int'), so that you can annotate a weight with its corresponding
--- constructor, and it will be checked that you got the order right.
+-- constructor. The constructors must appear in the same order as in the
+-- original type definition.
 --
 -- This will type-check.
 --
