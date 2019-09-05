@@ -236,7 +236,10 @@
 -- Suggestions to add more modifiers or otherwise improve this tutorial are welcome!
 -- <https://github.com/Lysxia/generic-random/issues The issue tracker is this way.>
 
+{-# LANGUAGE CPP #-}
+#if __GLASGOW_HASKELL__ >= 800
 {-# OPTIONS_GHC -Wno-unused-imports #-}
+#endif
 
 module Generic.Random.Tutorial () where
 
