@@ -366,11 +366,18 @@ fieldGen :: proxy s -> Gen a -> FieldGen s a
 fieldGen _ = FieldGen
 #endif
 
--- | Generators for containers of kind @Type -> Type@, parameterized by
--- the generator for each element.
+-- | Custom generators for \"containers\" of kind @Type -> Type@, parameterized
+-- by the generator for \"contained elements\".
+--
+-- A custom generator @'Gen1' f@ will be used for any field whose type has the
+-- form @f x@, requiring a generator of @x@.
 newtype Gen1 f = Gen1 { unGen1 :: forall a. Gen a -> Gen (f a) }
 
--- | Generators for unary type constructors that are not containers.
+-- | Custom generators for unary type constructors that are not \"containers\",
+-- i.e., which don't require a generator of @a@ to generate an @f a@.
+--
+-- A custom generator @'Gen1_' f@ will be used for any field whose type has the
+-- form @f x@.
 newtype Gen1_ f = Gen1_ { unGen1_ :: forall a. Gen (f a) }
 
 -- | An alternative to 'vectorOf' that divides the size parameter by the
