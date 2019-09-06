@@ -56,8 +56,8 @@
 --
 -- == Typed weights
 --
--- /GHC 8.0.1 and above only (base ≥ 4.9). For compatibility, the annotations
--- are still allowed on older GHC versions, but ignored./
+-- /GHC 8.0.1 and above only (base ≥ 4.9)./ For compatibility, the annotations
+-- are still allowed on older GHC versions, but ignored.
 --
 -- The weights actually have type @'W' \"ConstructorName\"@ (just a newtype
 -- around 'Int'), so that you can annotate a weight with its corresponding
@@ -176,6 +176,8 @@
 --
 -- = Custom generators for some fields
 --
+-- == Example 1 ('Test.QuickCheck.Gen', 'FieldGen')
+--
 -- Sometimes, a few fields may need custom generators instead of 'Test.QuickCheck.arbitrary'.
 -- For example, imagine here that @String@ is meant to represent
 -- alphanumerical strings only, and that IDs are meant to be nonnegative,
@@ -224,11 +226,56 @@
 --   arbitrary = 'genericArbitrarySingleG' customGens
 -- @
 --
+-- == Example 2 ('ConstrGen')
+--
+-- Here's the @Tree@ type from the beginning again.
+--
+-- @
+-- data Tree a = Leaf a | Node (Tree a) (Tree a)
+--   deriving 'GHC.Generics.Generic'
+-- @
+--
+-- We will generate "right-leaning linear trees", which look like this:
+--
+-- > Node (Leaf 1)
+-- >      (Node (Leaf 2)
+-- >            (Node (Leaf 3)
+-- >                  (Node (Leaf 4)
+-- >                        (Leaf 5))))
+--
+-- To do so, we force every left child of a @Node@ to be a @Leaf@:
+--
+-- @
+-- {-\# LANGUAGE ScopedTypeVariables \#-}
+--
+-- instance Arbitrary a => Arbitrary (Tree a) where
+--   arbitrary = 'genericArbitraryUG' customGens
+--     where
+--       -- Generator for the left field (i.e., at index 0) of constructor Node,
+--       -- which must have type (Tree a).
+--       customGens :: 'ConstrGen' \"Node\" 0 (Tree a)    ':+' ()
+--       customGens =  'ConstrGen' (Leaf '<$>' arbitrary) ':+' ()
+-- @
+--
+-- That instance is equivalent to the following:
+--
+-- @
+-- instance Arbitrary a => Arbitrary (Tree a) where
+--   arbitrary = oneof
+--     [ Leaf '<$>' arbitrary
+--     , Node '<$>' (Leaf '<$>' arbitrary) '<*>' arbitrary
+--     --                                  ^ recursive call
+--     ]
+-- @
+--
+-- == Custom generators reference
+--
 -- The custom generator modifiers that can occur in the list are:
 --
 -- - 'Test.QuickCheck.Gen': a generator for a specific type;
--- - 'FieldGen': a generator for a field name and type;
--- - 'Gen1': a generator for containers, parameterized by a generator
+-- - 'FieldGen': a generator for a record field;
+-- - 'ConstrGen': a generator for a field of a given constructor;
+-- - 'Gen1': a generator for \"containers\", parameterized by a generator
 --   for individual elements;
 -- - 'Gen1_': a generator for unary type constructors that are not
 --   containers.

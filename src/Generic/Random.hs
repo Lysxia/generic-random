@@ -53,10 +53,14 @@ module Generic.Random
   , Sizing (..)
   , setSized
   , setUnsized
+
+    -- ** Custom generators
   , (:+) (..)
 #if __GLASGOW_HASKELL__ >= 800
   , FieldGen (..)
   , fieldGen
+  , ConstrGen (..)
+  , constrGen
 #endif
   , Gen1 (..)
   , Gen1_ (..)

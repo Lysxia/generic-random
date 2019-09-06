@@ -324,9 +324,6 @@ type SizedOptsDef = Options 'Sized (Gen1 [] :+ ())
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _g) = s
 
-proxySizing :: opts -> Proxy (SizingOf opts)
-proxySizing _ = Proxy
-
 setSized :: Options s g -> Options 'Sized g
 setSized = coerce
 
@@ -356,14 +353,23 @@ type family SetGens (g :: Type) opts
 type instance SetGens g (Options s _g) = Options s g
 
 #if __GLASGOW_HASKELL__ >= 800
--- | A generator which overrides a specific field named @s@.
+-- | Custom generator for record fields named @s@.
 --
--- /Available only for @base >= 4.9@./
+-- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
 newtype FieldGen (s :: Symbol) a = FieldGen { unFieldGen :: Gen a }
 
 -- | 'FieldGen' constructor with the field name given via a proxy.
 fieldGen :: proxy s -> Gen a -> FieldGen s a
 fieldGen _ = FieldGen
+
+-- | Custom generator for the @i@-th field of the constructor named @c@.
+--
+-- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
+newtype ConstrGen (c :: Symbol) (i :: Nat) a = ConstrGen { unConstrGen :: Gen a }
+
+-- | 'ConstrGen' constructor with the constructor name given via a proxy.
+constrGen :: proxy '(c, i) -> Gen a -> ConstrGen c i a
+constrGen _ = ConstrGen
 #endif
 
 -- | Custom generators for \"containers\" of kind @Type -> Type@, parameterized
@@ -433,8 +439,8 @@ instance (GASum opts f, GASum opts g) => GA opts (f :+: g) where
   ga = gaSum'
   {-# INLINE ga #-}
 
-instance GAProduct (SizingOf opts) opts f => GA opts (M1 C c f) where
-  ga z _ _ = fmap M1 (gaProduct (proxySizing z) z)
+instance GAProduct (SizingOf opts) (Name c) opts f => GA opts (M1 C c f) where
+  ga z _ _ = fmap M1 (gaProduct (Proxy :: Proxy '(SizingOf opts, Name c)) z)
   {-# INLINE ga #-}
 
 gaSum' :: GASum opts f => opts -> Weights_ f -> Int -> Gen (f p)
@@ -452,55 +458,57 @@ instance (GASum opts f, GASum opts g) => GASum opts (f :+: g) where
     | otherwise = fmap R1 (gaSum z (i - n) b)
   {-# INLINE gaSum #-}
 
-instance GAProduct (SizingOf opts) opts f => GASum opts (M1 i c f) where
-  gaSum z _ _ = fmap M1 (gaProduct (proxySizing z) z)
+instance GAProduct (SizingOf opts) (Name c) opts f => GASum opts (M1 C c f) where
+  gaSum z _ _ = fmap M1 (gaProduct (Proxy :: Proxy '(SizingOf opts, Name c)) z)
   {-# INLINE gaSum #-}
 
 
-class GAProduct (s :: Sizing) opts f where
-  gaProduct :: proxys s -> opts -> Gen (f p)
+class GAProduct (s :: Sizing) (c :: Maybe Symbol) opts f where
+  gaProduct :: proxys '(s, c) -> opts -> Gen (f p)
 
-instance GAProduct' opts f => GAProduct 'Unsized opts f where
-  gaProduct _ = gaProduct'
+instance GAProduct' c 0 opts f => GAProduct 'Unsized c opts f where
+  gaProduct _ = gaProduct' (Proxy :: Proxy '(c, 0))
   {-# INLINE gaProduct #-}
 
 -- Single-field constructors: decrease size by 1.
-instance {-# OVERLAPPING #-} GAProduct' opts (S1 d f)
-  => GAProduct 'Sized opts (S1 d f) where
-  gaProduct _ = scale (\n -> max 0 (n-1)) . gaProduct'
+instance {-# OVERLAPPING #-} GAProduct' c 0 opts (S1 d f)
+  => GAProduct 'Sized c opts (S1 d f) where
+  gaProduct _ = scale (\n -> max 0 (n-1)) . gaProduct' (Proxy :: Proxy '(c, 0))
 
-instance (GAProduct' opts f, KnownNat (Arity f)) => GAProduct 'Sized opts f where
-  gaProduct _ = scale (`div` arity) . gaProduct'
+instance (GAProduct' c 0 opts f, KnownNat (Arity f)) => GAProduct 'Sized c opts f where
+  gaProduct _ = scale (`div` arity) . gaProduct' (Proxy :: Proxy '(c, 0))
     where
       arity = fromInteger (natVal (Proxy :: Proxy (Arity f)))
   {-# INLINE gaProduct #-}
 
-instance {-# OVERLAPPING #-} GAProduct 'Sized opts U1 where
+instance {-# OVERLAPPING #-} GAProduct 'Sized c opts U1 where
   gaProduct _ _ = pure U1
   {-# INLINE gaProduct #-}
 
 
-class GAProduct' opts f where
-  gaProduct' :: opts -> Gen (f p)
+class GAProduct' (c :: Maybe Symbol) (i :: Nat) opts f where
+  gaProduct' :: proxy '(c, i) -> opts -> Gen (f p)
 
-instance GAProduct' opts U1 where
-  gaProduct' _ = pure U1
+instance GAProduct' c i opts U1 where
+  gaProduct' _ _ = pure U1
   {-# INLINE gaProduct' #-}
 
 instance
   ( HasGenerators opts
-  , ArbitraryOr gs gs (SelectorName d) c
+  , ArbitraryOr gs gs '(c, i, Name d) a
   , gs ~ GeneratorsOf opts )
-  => GAProduct' opts (S1 d (K1 i c)) where
-  gaProduct' opts = fmap (M1 . K1) (arbitraryOr sel gs gs)
+  => GAProduct' c i opts (S1 d (K1 _k a)) where
+  gaProduct' _ opts = fmap (M1 . K1) (arbitraryOr sel gs gs)
     where
-      sel = Proxy :: Proxy (SelectorName d)
+      sel = Proxy :: Proxy '(c, i, Name d)
       gs = generators opts
   {-# INLINE gaProduct' #-}
 
-instance (GAProduct' opts f, GAProduct' opts g) => GAProduct' opts (f :*: g) where
+instance (GAProduct' c i opts f, GAProduct' c (i + Arity f) opts g) => GAProduct' c i opts (f :*: g) where
   -- TODO: Why does this inline better than eta-reducing? (GHC-8.2)
-  gaProduct' opts = (liftA2 . liftA2) (:*:) gaProduct' gaProduct' opts
+  gaProduct' px = (liftA2 . liftA2) (:*:)
+    (gaProduct' px)
+    (gaProduct' (Proxy :: Proxy '(c, i + Arity f)))
   {-# INLINE gaProduct' #-}
 
 
@@ -509,7 +517,7 @@ type family Arity f :: Nat where
   Arity (M1 _i _c _f) = 1
 
 
-class ArbitraryOr (fullGenList :: Type) (genList :: Type) (sel :: Maybe Symbol) a where
+class ArbitraryOr (fullGenList :: Type) (genList :: Type) (sel :: (Maybe Symbol, Nat, Maybe Symbol)) a where
   arbitraryOr :: proxy sel -> fullGenList -> genList -> Gen a
 
 instance {-# INCOHERENT #-} ArbitraryOr fg (Gen a :+ g) sel a where
@@ -525,23 +533,28 @@ instance Arbitrary a => ArbitraryOr fg () sel a where
   {-# INLINE arbitraryOr #-}
 
 #if __GLASGOW_HASKELL__ >= 800
-instance {-# INCOHERENT #-} ArbitraryOr fg (FieldGen n a :+ g) ('Just n) a where
+instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (FieldGen n a :+ g) '(con, i, 'Just n) a' where
   arbitraryOr _ _ (FieldGen gen :+ _) = gen
   {-# INLINE arbitraryOr #-}
 
-type family SelectorName (d :: Meta) :: Maybe Symbol
-type instance SelectorName ('MetaSel mn su ss ds) = mn
+instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (ConstrGen c i a :+ g) '( 'Just c, i, s) a' where
+  arbitraryOr _ _ (ConstrGen gen :+ _) = gen
+  {-# INLINE arbitraryOr #-}
+
+type family Name (d :: Meta) :: Maybe Symbol
+type instance Name ('MetaSel mn su ss ds) = mn
+type instance Name ('MetaCons n _f _s) = 'Just n
 #else
-type SelectorName d = (Nothing :: Maybe Symbol)
+type Name d = (Nothing :: Maybe Symbol)
 #endif
 
 instance {-# INCOHERENT #-} ArbitraryOr fg (Gen1_ f :+ g) sel (f a) where
   arbitraryOr _ _ (Gen1_ gen :+ _) = gen
 
-instance {-# INCOHERENT #-} ArbitraryOr fg fg 'Nothing a
+instance {-# INCOHERENT #-} ArbitraryOr fg fg '( 'Nothing, 0, 'Nothing) a
   => ArbitraryOr fg (Gen1 f :+ g) sel (f a) where
   arbitraryOr _ fg (Gen1 gen :+ _) = gen (arbitraryOr noSel fg fg)
-    where noSel = Proxy :: Proxy 'Nothing
+    where noSel = Proxy :: Proxy '( 'Nothing, 0, 'Nothing)
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))
   deriving Functor
