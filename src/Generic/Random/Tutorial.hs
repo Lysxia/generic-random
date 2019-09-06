@@ -29,8 +29,8 @@
 -- 'genericArbitrary' :: Arbitrary a => 'Weights' (Tree a) -> Gen (Tree a)
 -- 'genericArbitrary' (x '%' y '%' ()) =
 --   frequency
---     [ (x, Leaf \<$\> arbitrary)
---     , (y, Node \<$\> arbitrary \<*\> arbitrary)
+--     [ (x, Leaf '<$>' arbitrary)
+--     , (y, Node '<$>' arbitrary '<*>' arbitrary)
 --     ]
 -- @
 --
@@ -94,7 +94,7 @@
 -- @
 -- instance Arbitrary a => Arbitrary (Tree a) where
 --   arbitrary = 'genericArbitraryRec' (1 '%' 2 '%' ())
---     ``withBaseCase`` (Leaf \<$\> arbitrary)
+--     ``withBaseCase`` (Leaf '<$>' arbitrary)
 -- @
 --
 -- That is equivalent to the following definition. Note the
@@ -109,8 +109,8 @@
 --   else
 --     -- genericArbitraryRec
 --     frequency
---       [ (1, resize (max 0 (n - 1)) (Leaf \<$\> arbitrary))
---       , (2, resize (n \`div\` 2)     (Node \<$\> arbitrary \<*\> arbitrary))
+--       [ (1, resize (max 0 (n - 1)) (Leaf '<$>' arbitrary))
+--       , (2, resize (n \`div\` 2)     (Node '<$>' arbitrary '<*>' arbitrary))
 --       ]
 -- @
 --
@@ -203,10 +203,10 @@
 -- end lists with @()@).
 --
 -- @
--- customGens :: 'FieldGen' "userId" Int ':+' Gen String ':+' ()
+-- customGens :: 'FieldGen' "userId" Int ':+' 'Test.QuickCheck.Gen' String ':+' ()
 -- customGens =
---   ('FieldGen' . 'Test.QuickCheck.getNonNegative' \<$\> arbitrary) ':+'
---   ('Test.QuickCheck.listOf' ('Test.QuickCheck.elements' (filter isAlphaNum [minBound .. maxBound]))) ':+'
+--   'FieldGen' ('Test.QuickCheck.getNonNegative' '<$>' arbitrary) ':+'
+--   'Test.QuickCheck.listOf' ('Test.QuickCheck.elements' (filter isAlphaNum [minBound .. maxBound])) ':+'
 --   ()
 -- @
 --
