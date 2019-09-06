@@ -10,6 +10,16 @@
 module Generic.Random
   (
     -- * Arbitrary implementations
+
+    -- | The suffixes for the variants have the following meanings:
+    --
+    -- - @U@: pick constructors with uniform distribution (equivalent to
+    --   passing 'uniform' to the non-@U@ variant).
+    -- - @Single@: restricted to types with a single constructor.
+    -- - @G@: with custom generators.
+    -- - @Rec@: decrease the size at every recursive call (ensuring termination
+    --   for (most) recursive types).
+    -- - @'@: automatic discovery of "base cases" when size reaches 0.
     genericArbitrary
   , genericArbitraryU
   , genericArbitrarySingle
