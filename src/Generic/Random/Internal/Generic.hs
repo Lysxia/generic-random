@@ -165,7 +165,7 @@ genericArbitraryWith opts (Weights w n) =
 
 -- * Internal
 
-type family Weights_ (f :: * -> *) :: * where
+type family Weights_ (f :: Type -> Type) :: Type where
   Weights_ (f :+: g) = Weights_ f :| Weights_ g
   Weights_ (M1 D _c f) = Weights_ f
 #if __GLASGOW_HASKELL__ >= 800
@@ -366,7 +366,7 @@ fieldGen :: proxy s -> Gen a -> FieldGen s a
 fieldGen _ = FieldGen
 #endif
 
--- | Generators for containers of kind @* -> *@, parameterized by
+-- | Generators for containers of kind @Type -> Type@, parameterized by
 -- the generator for each element.
 newtype Gen1 f = Gen1 { unGen1 :: forall a. Gen a -> Gen (f a) }
 
