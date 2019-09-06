@@ -1,4 +1,4 @@
--- | Simple "GHC.Generics"-based 'Test.QuickCheck.arbitrary' generators.
+-- | "GHC.Generics"-based 'Test.QuickCheck.arbitrary' generators.
 --
 -- For more information:
 --
