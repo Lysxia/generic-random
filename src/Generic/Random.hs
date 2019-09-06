@@ -26,15 +26,12 @@ module Generic.Random
   , genericArbitraryRec
   , genericArbitrary'
   , genericArbitraryU'
+
+    -- ** With custom generators
   , genericArbitraryG
   , genericArbitraryUG
   , genericArbitrarySingleG
   , genericArbitraryRecG
-  , genericArbitraryWith
-
-    -- * Base cases for recursive types
-  , withBaseCase
-  , BaseCase (..)
 
     -- * Specifying finite distributions
   , Weights
@@ -42,19 +39,7 @@ module Generic.Random
   , (%)
   , uniform
 
-    -- * Full options
-  , Options ()
-  , SizedOpts
-  , sizedOpts
-  , SizedOptsDef
-  , sizedOptsDef
-  , UnsizedOpts
-  , unsizedOpts
-  , Sizing (..)
-  , setSized
-  , setUnsized
-
-    -- ** Custom generators
+    -- * Custom generators
   , (:+) (..)
 #if __GLASGOW_HASKELL__ >= 800
   , FieldGen (..)
@@ -64,16 +49,41 @@ module Generic.Random
 #endif
   , Gen1 (..)
   , Gen1_ (..)
-  , setGenerators
-
-    -- * Public classes
-  , GArbitrary
-  , GUniformWeight
 
     -- * Helpful combinators
   , listOf'
   , listOf1'
   , vectorOf'
+
+    -- * Base cases for recursive types
+  , withBaseCase
+  , BaseCase (..)
+
+    -- * Full options
+  , Options ()
+  , genericArbitraryWith
+
+    -- ** Size modifiers
+  , Sizing (..)
+  , setSized
+  , setUnsized
+
+    -- ** Custom generators
+  , SetGens
+  , setGenerators
+
+    -- ** Common options
+  , SizedOpts
+  , sizedOpts
+  , SizedOptsDef
+  , sizedOptsDef
+  , UnsizedOpts
+  , unsizedOpts
+
+    -- * Generic classes
+  , GArbitrary
+  , GUniformWeight
+
   ) where
 
 import Generic.Random.Internal.BaseCase
