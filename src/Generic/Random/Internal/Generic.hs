@@ -495,10 +495,10 @@ instance GAProduct' c i opts U1 where
 
 instance
   ( HasGenerators opts
-  , ArbitraryOr gs gs '(c, i, Name d) a
+  , ArbitraryOr gs () gs '(c, i, Name d) a
   , gs ~ GeneratorsOf opts )
   => GAProduct' c i opts (S1 d (K1 _k a)) where
-  gaProduct' _ opts = fmap (M1 . K1) (arbitraryOr sel gs gs)
+  gaProduct' _ opts = fmap (M1 . K1) (arbitraryOr sel gs () gs)
     where
       sel = Proxy :: Proxy '(c, i, Name d)
       gs = generators opts
@@ -516,31 +516,65 @@ type family Arity f :: Nat where
   Arity (f :*: g) = Arity f + Arity g
   Arity (M1 _i _c _f) = 1
 
+-- | Given a list of custom generators @gs@, find one that applies, or use
+-- @Arbitrary a@ by default.
+--
+-- @g@ and @gs@ follow this little state machine:
+--
+-- >           g,      gs | result
+-- > ---------------------+-----------------------------
+-- >          (),      () | END
+-- >          (), g :+ gs | g, gs
+-- >      g :+ h,      gs | g, h :+ gs
+-- >       Gen a,      gs | END if matching, else (), gs
+-- >  FieldGen a,      gs | idem
+-- > ConstrGen a,      gs | idem
+-- >      Gen1 a,      gs | idem
+-- >     Gen1_ a,      gs | idem
+class ArbitraryOr (fullGenList :: Type) (g :: Type) (gs :: Type)
+        (sel :: (Maybe Symbol, Nat, Maybe Symbol)) a where
+  arbitraryOr :: proxy sel -> fullGenList -> g -> gs -> Gen a
 
-class ArbitraryOr (fullGenList :: Type) (genList :: Type) (sel :: (Maybe Symbol, Nat, Maybe Symbol)) a where
-  arbitraryOr :: proxy sel -> fullGenList -> genList -> Gen a
-
-instance {-# INCOHERENT #-} ArbitraryOr fg (Gen a :+ g) sel a where
-  arbitraryOr _ _ (gen :+ _) = gen
+-- | All candidates have been exhausted
+instance Arbitrary a => ArbitraryOr fg () () sel a where
+  arbitraryOr _ _ _ _ = arbitrary
   {-# INLINE arbitraryOr #-}
 
-instance {-# OVERLAPPABLE #-} ArbitraryOr fg g sel a => ArbitraryOr fg (b :+ g) sel a where
-  arbitraryOr sel fg (_ :+ gens) = arbitraryOr sel fg gens
+-- | Examine the next candidate
+instance ArbitraryOr fg b g sel a => ArbitraryOr fg () (b :+ g) sel a where
+  arbitraryOr sel fg () (b :+ gens) = arbitraryOr sel fg b gens
   {-# INLINE arbitraryOr #-}
 
-instance Arbitrary a => ArbitraryOr fg () sel a where
-  arbitraryOr _ _ _ = arbitrary
+-- | Examine the last candidate (@g@ is not of the form @_ :+ _@)
+instance {-# OVERLAPS #-} ArbitraryOr fg g () sel a => ArbitraryOr fg () g sel a where
+  arbitraryOr sel fg () g = arbitraryOr sel fg g ()
+
+-- | This can happen if the generators form a tree rather than a list, for whatever reason.
+instance ArbitraryOr fg g (h :+ gs) sel a => ArbitraryOr fg (g :+ h) gs sel a where
+  arbitraryOr sel fg (g :+ h) gs = arbitraryOr sel fg g (h :+ gs)
+
+-- | None of the INCOHERENT instances match, discard the candidate @g@ and look
+-- at the rest of the list @gs@.
+instance {-# OVERLAPPABLE #-} ArbitraryOr fg () gs sel a => ArbitraryOr fg g gs sel a where
+  arbitraryOr sel fg _ = arbitraryOr sel fg ()
+
+-- | Matching custom generator for @a@.
+instance {-# INCOHERENT #-} ArbitraryOr fg (Gen a) g sel a where
+  arbitraryOr _ _ gen _ = gen
   {-# INLINE arbitraryOr #-}
 
 #if __GLASGOW_HASKELL__ >= 800
-instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (FieldGen n a :+ g) '(con, i, 'Just n) a' where
-  arbitraryOr _ _ (FieldGen gen :+ _) = gen
+-- | Matching custom generator for field @s@.
+instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (FieldGen s a) g '(con, i, 'Just s) a' where
+  arbitraryOr _ _ (FieldGen gen) _ = gen
   {-# INLINE arbitraryOr #-}
 
-instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (ConstrGen c i a :+ g) '( 'Just c, i, s) a' where
-  arbitraryOr _ _ (ConstrGen gen :+ _) = gen
+-- | Matching custom generator for @i@-th field of constructor @c@.
+instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (ConstrGen c i a) g '( 'Just c, i, s) a' where
+  arbitraryOr _ _ (ConstrGen gen) _ = gen
   {-# INLINE arbitraryOr #-}
 
+-- | Get the name contained in a 'Meta' tag.
 type family Name (d :: Meta) :: Maybe Symbol
 type instance Name ('MetaSel mn su ss ds) = mn
 type instance Name ('MetaCons n _f _s) = 'Just n
@@ -548,12 +582,15 @@ type instance Name ('MetaCons n _f _s) = 'Just n
 type Name d = (Nothing :: Maybe Symbol)
 #endif
 
-instance {-# INCOHERENT #-} ArbitraryOr fg (Gen1_ f :+ g) sel (f a) where
-  arbitraryOr _ _ (Gen1_ gen :+ _) = gen
+-- | Matching custom generator for non-container @f@
+instance {-# INCOHERENT #-} ArbitraryOr fg (Gen1_ f) g sel (f a) where
+  arbitraryOr _ _ (Gen1_ gen) _ = gen
 
-instance {-# INCOHERENT #-} ArbitraryOr fg fg '( 'Nothing, 0, 'Nothing) a
-  => ArbitraryOr fg (Gen1 f :+ g) sel (f a) where
-  arbitraryOr _ fg (Gen1 gen :+ _) = gen (arbitraryOr noSel fg fg)
+-- | Matching custom generator for container @f@. Start the search for containee @a@,
+-- discarding field information.
+instance {-# INCOHERENT #-} ArbitraryOr fg () fg '( 'Nothing, 0, 'Nothing) a
+  => ArbitraryOr fg (Gen1 f) g sel (f a) where
+  arbitraryOr _ fg (Gen1 gen) _ = gen (arbitraryOr noSel fg () fg)
     where noSel = Proxy :: Proxy '( 'Nothing, 0, 'Nothing)
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))

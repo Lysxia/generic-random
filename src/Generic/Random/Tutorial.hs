@@ -201,15 +201,13 @@
 --   are big or change often).
 --
 -- Using generic-random, we can declare a (heterogeneous) list of generators to
--- be used instead of 'Test.QuickCheck.arbitrary' when generating certain fields (remember to
--- end lists with @()@).
+-- be used instead of 'Test.QuickCheck.arbitrary' when generating certain fields.
 --
 -- @
--- customGens :: 'FieldGen' "userId" Int ':+' 'Test.QuickCheck.Gen' String ':+' ()
+-- customGens :: 'FieldGen' "userId" Int ':+' 'Test.QuickCheck.Gen' String
 -- customGens =
 --   'FieldGen' ('Test.QuickCheck.getNonNegative' '<$>' arbitrary) ':+'
---   'Test.QuickCheck.listOf' ('Test.QuickCheck.elements' (filter isAlphaNum [minBound .. maxBound])) ':+'
---   ()
+--   'Test.QuickCheck.listOf' ('Test.QuickCheck.elements' (filter isAlphaNum [minBound .. maxBound]))
 -- @
 --
 -- Now we use the 'genericArbitraryG' combinator and other @G@-suffixed
@@ -253,8 +251,8 @@
 --     where
 --       -- Generator for the left field (i.e., at index 0) of constructor Node,
 --       -- which must have type (Tree a).
---       customGens :: 'ConstrGen' \"Node\" 0 (Tree a)    ':+' ()
---       customGens =  'ConstrGen' (Leaf '<$>' arbitrary) ':+' ()
+--       customGens :: 'ConstrGen' \"Node\" 0 (Tree a)
+--       customGens =  'ConstrGen' (Leaf '<$>' arbitrary)
 -- @
 --
 -- That instance is equivalent to the following:

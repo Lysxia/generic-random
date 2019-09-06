@@ -46,7 +46,7 @@ eval name g = do
 data Tree2 = Leaf2 Int | Node2 Tree2 Tree2 deriving (Generic, Show)
 
 instance Arbitrary Tree2 where
-  arbitrary = genericArbitraryUG ((ConstrGen (Leaf2 <$> arbitrary) :: ConstrGen "Node2" 1 Tree2) :+ ())
+  arbitrary = genericArbitraryUG ((ConstrGen (Leaf2 <$> arbitrary) :: ConstrGen "Node2" 1 Tree2))
 
 isLeftBiased :: Tree2 -> Bool
 isLeftBiased (Leaf2 _) = True

@@ -33,8 +33,7 @@ instance Arbitrary R where
       gens =
         (FieldGen (pack . filter isAlphaNum <$> scale (* 5) arbitrary)
           :: FieldGen "id_" Text) :+
-        (pack . filter (/= '\NUL') <$> arbitrary) :+
-        ()
+        (pack . filter (/= '\NUL') <$> arbitrary)
 
   shrink = genericShrink
 
