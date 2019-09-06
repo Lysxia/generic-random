@@ -20,10 +20,6 @@ instance (Arbitrary a, BaseCase (T a)) => Arbitrary (T a) where
 
 instance NFData a => NFData (T a)
 
-f :: Gen (T (T Int))
-f = arbitrary
-
-
 data NTree = Leaf | Node [NTree] deriving (Generic, Show)
 
 instance Arbitrary NTree where
