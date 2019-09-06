@@ -42,5 +42,6 @@ instance Arbitrary a => Arbitrary (Tree a) where
 -- >             Node <$> arbitrary <*> arbitrary <*> arbitrary
 -- >         ]
 
+main :: IO ()
 main = sample (arbitrary :: Gen (Tree ()))
 ```
