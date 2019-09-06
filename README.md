@@ -3,12 +3,14 @@ Generic random generators [![Hackage](https://img.shields.io/hackage/v/generic-r
 
 Derive simple random generators for [QuickCheck](https://hackage.haskell.org/package/QuickCheck) using generics.
 
-Automating the `Arbitrary` boilerplate also ensures that if a type changes to
-have more constructors, then the generator fixes itself to generate that new
-case (with `uniform` distribution) or causes a compilation error (with an
-explicit distribution).
+Automating the `Arbitrary` boilerplate also ensures that when a type changes to
+have more or fewer constructors, then the generator either fixes itself to
+generate that new case (when using the `uniform` distribution) or causes a
+compilation error so you remember to fix it (when using an explicit
+distribution).
 
-A simple (optional) strategy to ensure termination for recursive types:
+This package also offers a simple (optional) strategy to ensure termination for
+recursive types:
 make `Test.QuickCheck.Gen`'s size parameter decrease at every recursive call;
 when it reaches zero, sample directly from a trivially terminating generator
 given explicitly (`genericArbitraryRec` and `withBaseCase`) or implicitly
