@@ -1,5 +1,16 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.3.0.0
+
+- Add `ConstrGen` (custom generators for fields specified by constructor name
+  and index).
+- Stop requiring custom generators lists to be terminated by `:+ ()`, or to be
+  lists at all.
+- Breaking minor change: when a record field has a different type than
+  a `FieldGen` custom generator for the same field name, this is now a
+  compilation error. This was simply ignored before.
+- Miscellaneous documentation improvements in `Generic.Random` module.
+
 # 1.2.0.0
 
 - Fix a bug where generators did not decrease the size parameter with
@@ -7,6 +18,7 @@ https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
 - The sized generators now use a custom generator for lists.
   Use `genericArbitraryRecG ()` to disable that.
+  See tutorial for more information.
 
 - Lists of custom generators are now constructed using `(:+)` instead of
   `GenList`
