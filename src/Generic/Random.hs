@@ -50,6 +50,66 @@ module Generic.Random
   , genericArbitraryU'
 
     -- ** With custom generators
+
+    -- |
+    -- === Note about incoherence
+    --
+    -- The custom generator feature relies on incoherent instances, which can
+    -- lead to surprising behaviors for parameterized types.
+    --
+    -- ==== __Example__
+    --
+    -- For example, here is a pair type and a custom generator of @Int@ (always
+    -- generating 0).
+    --
+    -- @
+    -- data Pair a b = Pair a b
+    --   deriving (Generic, Show)
+    --
+    -- customGen :: Gen Int
+    -- customGen = pure 0
+    -- @
+    --
+    -- The following two ways of defining a generator of @Pair Int Int@ are
+    -- __not__ equivalent.
+    --
+    -- The first way is to use 'genericArbitrarySingleG' to define a
+    -- @Gen (Pair a b)@ parameterized by types @a@ and @b@, and then
+    -- specialize it to @Gen (Pair Int Int)@.
+    --
+    -- In this case, the @customGen@ will be ignored.
+    --
+    -- @
+    -- genPair :: (Arbitrary a, Arbitrary b) => Gen (Pair a b)
+    -- genPair = 'genericArbitrarySingleG' customGen
+    --
+    -- genPair' :: Gen (Pair Int Int)
+    -- genPair' = genPair
+    -- -- Will generate nonzero pairs
+    -- @
+    --
+    -- The second way is to define @Gen (Pair Int Int)@ directly using
+    -- 'genericArbitrarySingleG' (as if we inlined @genPair@ in @genPair'@
+    -- above.
+    --
+    -- Then the @customGen@ will actually be used.
+    --
+    -- @
+    -- genPair2 :: Gen (Pair Int Int)
+    -- genPair2 = 'genericArbitrarySingleG' customGen
+    -- -- Will only generate (Pair 0 0)
+    -- @
+    --
+    -- In other words, the decision of whether to use a custom generator
+    -- is done by comparing the type of the custom generator with the type of
+    -- the field only in the context where 'genericArbitrarySingleG' is being
+    -- used (or any other variant with a @G@ suffix).
+    --
+    -- In the first case above, those fields have types @a@ and @b@, which are
+    -- not equal to @Int@ (or rather, there is no available evidence that they
+    -- are equal to @Int@, even if they could be instantiated as @Int@ later).
+    -- In the second case, they both actually have type @Int@.
+
   , genericArbitraryG
   , genericArbitraryUG
   , genericArbitrarySingleG
