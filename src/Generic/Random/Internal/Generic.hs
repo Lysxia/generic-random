@@ -120,7 +120,7 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 -- === Note on multiple matches
 --
 -- If the list contains multiple matching types for a field @x@ of type @a@
--- (i.e., either @a@ or @'FieldGen' "x" a@), the generator for the first
+-- (i.e., either @Gen a@ or @'FieldGen' "x" a@), the generator for the first
 -- match will be picked.
 genericArbitraryG
   :: (GArbitrary (SetGens genList UnsizedOpts) a)
