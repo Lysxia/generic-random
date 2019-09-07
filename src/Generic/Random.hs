@@ -1,5 +1,27 @@
 -- | "GHC.Generics"-based 'Test.QuickCheck.arbitrary' generators.
 --
+-- = Basic usage
+--
+-- @
+-- data Foo = A | B | C  -- some generic data type
+--   deriving 'GHC.Generics.Generic'
+-- @
+--
+-- Derive instances of 'Test.QuickCheck.Arbitrary'.
+--
+-- @
+-- instance Arbitrary Foo where
+--   arbitrary = 'genericArbitrary' 'uniform'  -- give a distribution of constructors
+-- @
+--
+-- Or derive standalone generators (the fields must still be instances of
+-- 'Test.QuickCheck.Arbitrary', or use custom generators).
+--
+-- @
+-- genFoo :: Gen Foo
+-- genFoo = 'genericArbitrary' 'uniform'
+-- @
+--
 -- For more information:
 --
 -- - "Generic.Random.Tutorial"
