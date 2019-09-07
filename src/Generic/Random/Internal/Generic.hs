@@ -92,7 +92,9 @@ genericArbitrarySingle = genericArbitraryU
 --
 -- > genericArbitraryRec (7 % 11 % 13 % ()) :: Gen a
 --
--- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
+-- N.B.: This replaces the generator for fields of type @[t]@ with
+-- @'listOf'' arbitrary@ instead of @'Test.QuickCheck.listOf' arbitrary@ (i.e., @arbitrary@ for
+-- lists).
 genericArbitraryRec
   :: (GArbitrary SizedOptsDef a)
   => Weights a  -- ^ List of weights for every constructor

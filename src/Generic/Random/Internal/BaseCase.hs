@@ -47,7 +47,9 @@ import Generic.Random.Internal.Generic
 --
 -- > genericArbitrary' (17 % 19 % 23 % ()) :: Gen a
 --
--- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
+-- N.B.: This replaces the generator for fields of type @[t]@ with
+-- @'Test.QuickCheck.listOf'' arbitrary@ instead of @'Test.QuickCheck.listOf' arbitrary@ (i.e., @arbitrary@ for
+-- lists).
 genericArbitrary'
   :: (GArbitrary SizedOptsDef a, BaseCase a)
   => Weights a  -- ^ List of weights for every constructor
@@ -58,7 +60,9 @@ genericArbitrary' w = genericArbitraryRec w `withBaseCase` baseCase
 --
 -- > genericArbitraryU' :: Gen a
 --
--- N.B.: This replaces fields of type @[t]@ with @'listOf'' arbitrary@.
+-- N.B.: This replaces the generator for fields of type @[t]@ with
+-- @'Test.QuickCheck.listOf'' arbitrary@ instead of @'Test.QuickCheck.listOf' arbitrary@ (i.e., @arbitrary@ for
+-- lists).
 genericArbitraryU'
   :: (GArbitrary SizedOptsDef a, BaseCase a, GUniformWeight a)
   => Gen a
