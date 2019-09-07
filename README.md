@@ -47,3 +47,18 @@ instance Arbitrary a => Arbitrary (Tree a) where
 main :: IO ()
 main = sample (arbitrary :: Gen (Tree ()))
 ```
+
+Related
+-------
+
+- The following two packages also derive random generators, but only with a uniform
+  distribution of constructors:
+
+    + [quickcheck-arbitrary-template](https://hackage.haskell.org/package/quickcheck-arbitrary-template) (TH)
+    + [generic-arbitrary](https://hackage.haskell.org/package/generic-arbitrary-0.1.0) (GHC Generics)
+
+- [testing-feat](http://hackage.haskell.org/package/testing-feat):
+  derive enumerations for algebraic data types, which can be turned into random generators (TH).
+
+- [boltzmann-samplers](https://hackage.haskell.org/package/boltzmann-samplers):
+  derive Boltzmann samplers (SYB).
