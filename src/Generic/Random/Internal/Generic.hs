@@ -113,8 +113,7 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 -- customGens :: Gen String ':+' Gen Int
 -- customGens =
 --   (filter (/= '\NUL') '<$>' arbitrary) ':+'
---   (getNonNegative '<$>' arbitrary) ':+'
---   ()
+--   (getNonNegative '<$>' arbitrary)
 -- @
 --
 -- === Note on multiple matches
@@ -527,6 +526,7 @@ type family Arity f :: Nat where
 -- > ---------------------+-----------------------------
 -- >          (),      () | END
 -- >          (), g :+ gs | g, gs
+-- >          (),      g  | g, () when g is not (_ :+ _)
 -- >      g :+ h,      gs | g, h :+ gs
 -- >       Gen a,      gs | END if matching, else (), gs
 -- >  FieldGen a,      gs | idem
