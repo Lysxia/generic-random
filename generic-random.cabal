@@ -11,7 +11,7 @@ description:
 homepage:            http://github.com/lysxia/generic-random
 license:             MIT
 license-file:        LICENSE
-stability:           Experimental
+stability:           Stable
 author:              Li-yao Xia
 maintainer:          lysxia@gmail.com
 category:            Generics, Testing
