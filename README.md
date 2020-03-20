@@ -1,9 +1,10 @@
 Generic random generators [![Hackage](https://img.shields.io/hackage/v/generic-random.svg)](https://hackage.haskell.org/package/generic-random) [![Build Status](https://travis-ci.org/Lysxia/generic-random.svg)](https://travis-ci.org/Lysxia/generic-random)
 =========================
 
-Derive simple random generators for [QuickCheck](https://hackage.haskell.org/package/QuickCheck) using generics.
+Generic random generators
+to implement `Arbitrary` instances for [QuickCheck](https://hackage.haskell.org/package/QuickCheck)
 
-Automating the `Arbitrary` boilerplate also ensures that when a type changes to
+Automating the `arbitrary` boilerplate also ensures that when a type changes to
 have more or fewer constructors, then the generator either fixes itself to
 generate that new case (when using the `uniform` distribution) or causes a
 compilation error so you remember to fix it (when using an explicit
