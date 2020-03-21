@@ -1,6 +1,6 @@
 name:                generic-random
 version:             1.3.0.0
-synopsis:            Generic random generators to derive @Arbitrary@ instances
+synopsis:            Generic random generators for QuickCheck
 description:
     Derive instances of @Arbitrary@ for QuickCheck,
     with various options to customize implementations.
