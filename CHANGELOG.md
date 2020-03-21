@@ -1,5 +1,9 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.3.0.1
+
+- Fix small typos in documentation.
+
 # 1.3.0.0
 
 - Add `ConstrGen` (custom generators for fields specified by constructor name
