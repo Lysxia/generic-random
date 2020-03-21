@@ -19,11 +19,13 @@
 --   arbitrary = 'genericArbitrary' (9 '%' 8 '%' ())
 -- @
 --
--- @arbitrary :: 'Test.QuickCheck.Gen' (Tree a)@ picks a @Leaf@ with probability 9\/17, or a
+-- That random generator @arbitrary :: 'Test.QuickCheck.Gen' (Tree a)@ picks a
+-- @Leaf@ with probability 9\/17, or a
 -- @Node@ with probability 8\/17, and recursively fills their fields with
 -- @arbitrary@.
 --
--- For @Tree@, 'genericArbitrary' produces code equivalent to the following:
+-- For @Tree@, the generic implementation 'genericArbitrary' is equivalent to
+-- the following:
 --
 -- @
 -- 'genericArbitrary' :: Arbitrary a => 'Weights' (Tree a) -> Gen (Tree a)
@@ -43,7 +45,7 @@
 --
 -- The list of weights is built up with the @('%')@ operator as a cons, and using
 -- the unit @()@ as the empty list, in the order corresponding to the data type
--- definition. The uniform distribution can be obtained with 'uniform'.
+-- definition.
 --
 -- == Uniform distribution
 --
