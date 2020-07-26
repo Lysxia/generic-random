@@ -322,7 +322,15 @@ sizedOptsDef = Options (Gen1 listOf' :+ ())
 
 
 -- | Whether to decrease the size parameter before generating fields.
-data Sizing = Sized | Unsized
+--
+-- The 'Sized' option makes the size parameter decrease in the following way:
+-- - Constructors with one field decrease the size parameter by 1 to generate
+--   that field.
+-- - Constructors with more than one field split the size parameter among all
+--   fields; the size parameter is rounded down to then be divided equally.
+data Sizing
+  = Sized     -- ^ Decrease the size parameter when running generators for fields
+  | Unsized   -- ^ Don't touch the size parameter
 
 type UnsizedOpts = Options 'Unsized ()
 type SizedOpts = Options 'Sized ()
