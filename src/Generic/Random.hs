@@ -122,6 +122,32 @@ module Generic.Random
   , uniform
 
     -- * Custom generators
+
+    -- | Custom generators can be specified in a list constructed with @(':+')@,
+    -- and passed to functions such as 'genericArbitraryG' to override how certain
+    -- fields are generated.
+    --
+    -- Example:
+    --
+    -- @
+    -- customGens :: Gen String ':+' Gen Int
+    -- customGens =
+    --   (filter (/= '\NUL') '<$>' arbitrary) ':+'
+    --   (getNonNegative '<$>' arbitrary)
+    -- @
+    --
+    -- There are also different types of generators, other than 'Gen', providing
+    -- more ways to select the fields the generator than by simply comparing types:
+    --
+    -- - @'Gen' a@: override fields of type @a@;
+    -- - @'Gen1' f@: override fields of type @f x@ for some @x@, requiring a generator for @x@;
+    -- - @'Gen1_' f@: override fields of type @f x@ for some @x@, __not__ requiring a generator for @x@;
+    -- - @'FieldGen' s a@: override record fields named @s@, which must have type @a@;
+    -- - @'ConstrGen' c i a@: override the field at index @i@ of constructor @c@,
+    --   which must have type @a@ (0-indexed);
+    --
+    -- Multiple generators may match a given field: the first, leftmost
+    -- generator in the list will be chosen.
   , (:+) (..)
 #if __GLASGOW_HASKELL__ >= 800
   , FieldGen (..)

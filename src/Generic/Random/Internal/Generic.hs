@@ -107,7 +107,8 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 --
 -- > genericArbitraryG customGens (17 % 19 % ())
 --
--- where, for example to override generators for 'String' and 'Int' fields,
+-- where, the generators for 'String' and 'Int' fields are overridden as
+-- follows, for example:
 --
 -- @
 -- customGens :: Gen String ':+' Gen Int
@@ -118,9 +119,7 @@ genericArbitraryRec = genericArbitraryWith sizedOptsDef
 --
 -- === Note on multiple matches
 --
--- If the list contains multiple matching types for a field @x@ of type @a@
--- (i.e., either @Gen a@ or @'FieldGen' "x" a@), the generator for the first
--- match will be picked.
+-- Multiple generators may match a given field: the first will be chosen.
 genericArbitraryG
   :: (GArbitrary (SetGens genList UnsizedOpts) a)
   => genList
@@ -356,6 +355,9 @@ type instance SetGens g (Options s _g) = Options s g
 #if __GLASGOW_HASKELL__ >= 800
 -- | Custom generator for record fields named @s@.
 --
+-- If there is a field named @s@ with a different type,
+-- this will result in a type error.
+--
 -- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
 newtype FieldGen (s :: Symbol) a = FieldGen { unFieldGen :: Gen a }
 
@@ -364,6 +366,7 @@ fieldGen :: proxy s -> Gen a -> FieldGen s a
 fieldGen _ = FieldGen
 
 -- | Custom generator for the @i@-th field of the constructor named @c@.
+-- Fields are 0-indexed.
 --
 -- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
 newtype ConstrGen (c :: Symbol) (i :: Nat) a = ConstrGen { unConstrGen :: Gen a }
@@ -377,7 +380,9 @@ constrGen _ = ConstrGen
 -- by the generator for \"contained elements\".
 --
 -- A custom generator @'Gen1' f@ will be used for any field whose type has the
--- form @f x@, requiring a generator of @x@.
+-- form @f x@, requiring a generator of @x@. The generator for @x@ will be
+-- constructed using the list of custom generators if possible, otherwise
+-- an instance @Arbitrary x@ will be required.
 newtype Gen1 f = Gen1 { unGen1 :: forall a. Gen a -> Gen (f a) }
 
 -- | Custom generators for unary type constructors that are not \"containers\",
