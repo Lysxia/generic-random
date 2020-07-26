@@ -297,6 +297,13 @@ instance UniformWeight_ (Rep a) => GUniformWeight a
 
 
 -- | Type-level options for 'GArbitrary'.
+--
+-- Note: it is recommended to avoid referring to the 'Options' type
+-- explicitly in code, as the set of options may change in the future.
+-- Instead, use the provided synonyms and setters:
+--
+-- - Synonyms: 'UnsizedOpts', 'SizedOpts', 'SizedOptsDef'
+-- - Setters: 'SetSized', 'SetUnsized', 'SetGens'
 newtype Options (s :: Sizing) (genList :: Type) = Options
   { _generators :: genList
   }
@@ -323,6 +330,12 @@ type SizedOptsDef = Options 'Sized (Gen1 [] :+ ())
 
 type family SizingOf opts :: Sizing
 type instance SizingOf (Options s _g) = s
+
+type family SetSized (o :: Type) :: Type
+type instance SetSized (Options s g) = Options 'Sized g
+
+type family SetUnsized (o :: Type) :: Type
+type instance SetUnsized (Options s g) = Options 'Unsized g
 
 setSized :: Options s g -> Options 'Sized g
 setSized = coerce

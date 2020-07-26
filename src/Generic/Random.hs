@@ -173,6 +173,8 @@ module Generic.Random
 
     -- ** Size modifiers
   , Sizing (..)
+  , SetSized
+  , SetUnsized
   , setSized
   , setUnsized
 
