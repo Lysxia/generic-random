@@ -155,7 +155,7 @@
 -- where the depth of a constructor is defined as @1 + max(0, depths of fields)@,
 -- e.g., @Leaf ()@ has depth 2.
 --
--- == Note about lists
+-- == Note about lists #notelists#
 --
 -- The @Arbitrary@ instance for lists can be problematic for this way
 -- of implementing recursive sized generators, because they make a lot of
