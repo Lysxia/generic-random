@@ -1,6 +1,7 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,6 +13,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 #if __GLASGOW_HASKELL__ < 710
@@ -35,11 +37,15 @@ module Generic.Random.Internal.Generic where
 import Control.Applicative (Applicative(..))
 #endif
 import Control.Applicative (Alternative(..), liftA2)
-import Data.Coerce (coerce)
+import Data.Coerce (Coercible, coerce)
 #if __GLASGOW_HASKELL__ >= 800
 import Data.Kind (Type)
 #endif
+
 import Data.Proxy (Proxy(..))
+import Data.Type.Bool (type (&&))
+import Data.Type.Equality (type (==))
+
 #if __GLASGOW_HASKELL__ >= 800
 import GHC.Generics hiding (S, prec)
 #else
@@ -300,13 +306,38 @@ instance UniformWeight_ (Rep a) => GUniformWeight a
 --
 -- Note: it is recommended to avoid referring to the 'Options' type
 -- explicitly in code, as the set of options may change in the future.
--- Instead, use the provided synonyms and setters:
+-- Instead, use the provided synonyms ('UnsizedOpts', 'SizedOpts', 'SizedOptsDef')
+-- and the setter 'SetOptions' (abbreviated as @('<+')@).
 --
--- - Synonyms: 'UnsizedOpts', 'SizedOpts', 'SizedOptsDef'
--- - Setters: 'SetSized', 'SetUnsized', 'SetGens'
-newtype Options (s :: Sizing) (genList :: Type) = Options
+newtype Options (c :: Coherence) (s :: Sizing) (genList :: Type) = Options
   { _generators :: genList
   }
+
+-- | Setter for 'Options'.
+--
+-- This subsumes the other setters: 'SetSized', 'SetUnsized', 'SetGens'.
+type family SetOptions (x :: k) (o :: Type) :: Type
+type instance SetOptions (s :: Sizing) (Options c _s g) = Options c s g
+type instance SetOptions (c :: Coherence) (Options _c s g) = Options c s g
+type instance SetOptions (g :: Type) (Options c s _g) = Options c s g
+
+-- | Infix flipped synonym for 'Options'.
+type (<+) o x = SetOptions x o
+infixl 1 <+
+
+
+type UnsizedOpts = Options 'INCOHERENT 'Unsized ()
+type SizedOpts = Options 'INCOHERENT 'Sized ()
+type SizedOptsDef = Options 'INCOHERENT 'Sized (Gen1 [] :+ ())
+
+-- | Like 'UnsizedOpts', but using coherent instances by default.
+type CohUnsizedOpts = Options 'COHERENT 'Unsized ()
+
+-- | Like 'SizedOpts', but using coherent instances by default.
+type CohSizedOpts = Options 'COHERENT 'Sized ()
+
+setOpts :: forall x o. (Coercible o (SetOptions x o)) => o -> SetOptions x o
+setOpts = coerce
 
 -- | Default options for unsized generators.
 unsizedOpts :: UnsizedOpts
@@ -320,6 +351,14 @@ sizedOpts = Options ()
 sizedOptsDef :: SizedOptsDef
 sizedOptsDef = Options (Gen1 listOf' :+ ())
 
+-- | Like 'unsizedOpts', but using coherent instances by default.
+cohUnsizedOpts :: CohUnsizedOpts
+cohUnsizedOpts = Options ()
+
+-- | Like 'sizedOpts' but using coherent instances by default.
+cohSizedOpts :: CohSizedOpts
+cohSizedOpts = Options ()
+
 
 -- | Whether to decrease the size parameter before generating fields.
 --
@@ -332,24 +371,67 @@ data Sizing
   = Sized     -- ^ Decrease the size parameter when running generators for fields
   | Unsized   -- ^ Don't touch the size parameter
 
-type UnsizedOpts = Options 'Unsized ()
-type SizedOpts = Options 'Sized ()
-type SizedOptsDef = Options 'Sized (Gen1 [] :+ ())
-
 type family SizingOf opts :: Sizing
-type instance SizingOf (Options s _g) = s
+type instance SizingOf (Options _c s _g) = s
 
 type family SetSized (o :: Type) :: Type
-type instance SetSized (Options s g) = Options 'Sized g
+type instance SetSized (Options c s g) = Options c 'Sized g
 
 type family SetUnsized (o :: Type) :: Type
-type instance SetUnsized (Options s g) = Options 'Unsized g
+type instance SetUnsized (Options c s g) = Options c 'Unsized g
 
-setSized :: Options s g -> Options 'Sized g
+setSized :: Options c s g -> Options c 'Sized g
 setSized = coerce
 
-setUnsized :: Options s g -> Options 'Unsized g
+setUnsized :: Options c s g -> Options c 'Unsized g
 setUnsized = coerce
+
+
+-- | For custom generators to work with parameterized types, incoherent
+-- instances must be used internally.
+-- In practice, the resulting behavior is what users want 100% of the time,
+-- so you should forget this option even exists.
+--
+-- === __Details__
+--
+-- The default configuration of generic-random does a decent job if
+-- we trust GHC implements precisely the instance resolution algorithm as
+-- described in the GHC manual:
+--
+-- - https://downloads.haskell.org/ghc/latest/docs/html/users_guide/glasgow_exts.html#overlapping-instances
+--
+-- While that assumption holds in practice, it is overly context-dependent
+-- (to know the context leading to a particular choice, we must replay the
+-- whole resolution algorithm).
+-- In particular, this algorithm may find one solution, but it is not
+-- guaranteed to be unique: the behavior of the program is dependent on
+-- implementation details.
+--
+-- An notable property to consider of an implicit type system (such as type
+-- classes) is coherence: the behavior of the program is stable under
+-- specialization.
+--
+-- This sounds nice on paper, but actually leads to surprising behavior for
+-- generic implementations with parameterized types, such as generic-random.
+--
+-- To address that, the coherence property can be relaxd by users, by
+-- explicitly allowing some custom generators to be chosen incoherently. With
+-- appropriate precautions, it is possible to ensure a weaker property which
+-- nevertheless helps keep type inference predictable: when a solution is
+-- found, it is unique.
+-- (This is assuredly weaker, i.e., is not stable under specialization.)
+data Coherence
+  = INCOHERENT  -- ^ Match custom generators incoherently.
+  | COHERENT
+    -- ^ Match custom generators coherently by default
+    -- (can be manually bypassed with 'Incoherent').
+
+type family CoherenceOf (o :: Type) :: Coherence
+type instance CoherenceOf (Options c _s _g) = c
+
+-- | Match this generator incoherently when the 'INCOHERENT' option is set.
+newtype Incoherent g = Incoherent g
+
 
 -- | Heterogeneous list of generators.
 data a :+ b = a :+ b
@@ -358,20 +440,27 @@ infixr 1 :+
 
 
 type family GeneratorsOf opts :: Type
-type instance GeneratorsOf (Options _s g) = g
+type instance GeneratorsOf (Options _c _s g) = g
 
 class HasGenerators opts where
   generators :: opts -> GeneratorsOf opts
 
-instance HasGenerators (Options s g) where
+instance HasGenerators (Options c s g) where
   generators = _generators
 
-setGenerators :: genList -> Options s g0 -> Options s genList
+-- | Define the set of custom generators.
+--
+-- Note: for recursive types which can recursively appear inside lists or other
+-- containers, you may want to include a custom generator to decrease the size
+-- when generating such containers.
+--
+-- See also the Note about lists in "Generic.Random.Tutorial#notelists".
+setGenerators :: genList -> Options c s g0 -> Options c s genList
 setGenerators gens (Options _) = Options gens
 
-
 type family SetGens (g :: Type) opts
-type instance SetGens g (Options s _g) = Options s g
+type instance SetGens g (Options c s _g) = Options c s g
+
 
 #if __GLASGOW_HASKELL__ >= 800
 -- | Custom generator for record fields named @s@.
@@ -412,6 +501,7 @@ newtype Gen1 f = Gen1 { unGen1 :: forall a. Gen a -> Gen (f a) }
 -- A custom generator @'Gen1_' f@ will be used for any field whose type has the
 -- form @f x@.
 newtype Gen1_ f = Gen1_ { unGen1_ :: forall a. Gen (f a) }
+
 
 -- | An alternative to 'vectorOf' that divides the size parameter by the
 -- length of the list.
@@ -522,12 +612,14 @@ instance GAProduct' c i opts U1 where
 
 instance
   ( HasGenerators opts
-  , ArbitraryOr gs () gs '(c, i, Name d) a
-  , gs ~ GeneratorsOf opts )
+  , FindGen 'Shift ('S gs coh '(c, i, Name d)) () gs a
+  , gs ~ GeneratorsOf opts
+  , coh ~ CoherenceOf opts )
   => GAProduct' c i opts (S1 d (K1 _k a)) where
-  gaProduct' _ opts = fmap (M1 . K1) (arbitraryOr sel gs () gs)
+  gaProduct' _ opts = fmap (M1 . K1) (findGen (is, s, gs) () gs)
     where
-      sel = Proxy :: Proxy '(c, i, Name d)
+      is = Proxy :: Proxy 'Shift
+      s = Proxy :: Proxy ('S gs coh '(c, i, Name d))
       gs = generators opts
   {-# INLINE gaProduct' #-}
 
@@ -543,8 +635,8 @@ type family Arity f :: Nat where
   Arity (f :*: g) = Arity f + Arity g
   Arity (M1 _i _c _f) = 1
 
--- | Given a list of custom generators @gs@, find one that applies, or use
--- @Arbitrary a@ by default.
+-- | Given a list of custom generators @g :+ gs@, find one that applies,
+-- or use @Arbitrary a@ by default.
 --
 -- @g@ and @gs@ follow this little state machine:
 --
@@ -554,53 +646,98 @@ type family Arity f :: Nat where
 -- >          (), g :+ gs | g, gs
 -- >          (),      g  | g, () when g is not (_ :+ _)
 -- >      g :+ h,      gs | g, h :+ gs
--- >       Gen a,      gs | END if matching, else (), gs
+-- >       Gen a,      gs | END if g matches, else ((), gs)
 -- >  FieldGen a,      gs | idem
 -- > ConstrGen a,      gs | idem
 -- >      Gen1 a,      gs | idem
 -- >     Gen1_ a,      gs | idem
-class ArbitraryOr (fullGenList :: Type) (g :: Type) (gs :: Type)
-        (sel :: (Maybe Symbol, Nat, Maybe Symbol)) a where
-  arbitraryOr :: proxy sel -> fullGenList -> g -> gs -> Gen a
+class FindGen (i :: AInstr) (s :: AStore) (g :: Type) (gs :: Type) (a :: Type) where
+  findGen :: (Proxy i, Proxy s, FullGenListOf s) -> g -> gs -> Gen a
+
+data AInstr = Shift | Match Coherence | MatchCoh Bool
+data AStore = S Type Coherence ASel
+
+type ASel = (Maybe Symbol, Nat, Maybe Symbol)
+
+iShift :: Proxy 'Shift
+iShift = Proxy
+
+type family FullGenListOf (s :: AStore) :: Type where
+  FullGenListOf ('S fg _coh _sel) = fg
+
+type family ACoherenceOf (s :: AStore) :: Coherence where
+  ACoherenceOf ('S _fg coh _sel) = coh
+
+type family ASelOf (s :: AStore) :: ASel where
+  ASelOf ('S _fg _coh sel) = sel
 
 -- | All candidates have been exhausted
-instance Arbitrary a => ArbitraryOr fg () () sel a where
-  arbitraryOr _ _ _ _ = arbitrary
-  {-# INLINE arbitraryOr #-}
+instance Arbitrary a => FindGen 'Shift s () () a where
+  findGen _ _ _ = arbitrary
+  {-# INLINEABLE findGen #-}
 
 -- | Examine the next candidate
-instance ArbitraryOr fg b g sel a => ArbitraryOr fg () (b :+ g) sel a where
-  arbitraryOr sel fg () (b :+ gens) = arbitraryOr sel fg b gens
-  {-# INLINE arbitraryOr #-}
+instance FindGen 'Shift s b g a => FindGen 'Shift s () (b :+ g) a where
+  findGen p () (b :+ gens) = findGen p b gens
+  {-# INLINEABLE findGen #-}
 
 -- | Examine the last candidate (@g@ is not of the form @_ :+ _@)
-instance {-# OVERLAPS #-} ArbitraryOr fg g () sel a => ArbitraryOr fg () g sel a where
-  arbitraryOr sel fg () g = arbitraryOr sel fg g ()
+instance {-# OVERLAPS #-} FindGen 'Shift s g () a => FindGen 'Shift s () g a where
+  findGen p () g = findGen p g ()
 
 -- | This can happen if the generators form a tree rather than a list, for whatever reason.
-instance ArbitraryOr fg g (h :+ gs) sel a => ArbitraryOr fg (g :+ h) gs sel a where
-  arbitraryOr sel fg (g :+ h) gs = arbitraryOr sel fg g (h :+ gs)
+instance FindGen 'Shift s g (h :+ gs) a => FindGen 'Shift s (g :+ h) gs a where
+  findGen p (g :+ h) gs = findGen p g (h :+ gs)
+
+instance FindGen ('Match 'INCOHERENT) s g gs a => FindGen 'Shift s (Incoherent g) gs a where
+  findGen (_, s, fg) (Incoherent g) = findGen (im, s, fg) g where
+    im = Proxy :: Proxy ('Match 'INCOHERENT)
+
+-- | If none of the above matches, then @g@ should be a simple generator,
+-- and we test whether it matches the type @a@.
+instance {-# OVERLAPPABLE #-} FindGen ('Match (ACoherenceOf s)) s g gs a
+  => FindGen 'Shift s g gs a where
+  findGen (_, s, fg) = findGen (im, s, fg) where
+    im = Proxy :: Proxy ('Match (ACoherenceOf s))
+
+-- INCOHERENT
 
 -- | None of the INCOHERENT instances match, discard the candidate @g@ and look
 -- at the rest of the list @gs@.
-instance {-# OVERLAPPABLE #-} ArbitraryOr fg () gs sel a => ArbitraryOr fg g gs sel a where
-  arbitraryOr sel fg _ = arbitraryOr sel fg ()
+instance FindGen 'Shift s () gs a
+  => FindGen ('Match 'INCOHERENT) s _g gs a where
+  findGen (_, s, fg) _ = findGen (iShift, s, fg) () where
 
 -- | Matching custom generator for @a@.
-instance {-# INCOHERENT #-} ArbitraryOr fg (Gen a) g sel a where
-  arbitraryOr _ _ gen _ = gen
-  {-# INLINE arbitraryOr #-}
+instance {-# INCOHERENT #-} FindGen ('Match 'INCOHERENT) s (Gen a) gs a where
+  findGen _ gen _ = gen
+  {-# INLINEABLE findGen #-}
+
+-- | Matching custom generator for non-container @f@.
+instance {-# INCOHERENT #-} FindGen ('Match 'INCOHERENT) s (Gen1_ f) gs (f a) where
+  findGen _ (Gen1_ gen) _ = gen
+
+-- | Matching custom generator for container @f@. Start the search for containee @a@,
+-- discarding field information.
+instance {-# INCOHERENT #-} FindGen 'Shift ('S fg coh DummySel) () fg a
+  => FindGen ('Match 'INCOHERENT) ('S fg coh _sel) (Gen1 f) gs (f a) where
+  findGen (_, _, fg) (Gen1 gen) _ = gen (findGen (iShift, s, fg) () fg) where
+    s  = Proxy :: Proxy ('S fg coh DummySel)
+
+type DummySel = '( 'Nothing, 0, 'Nothing)
 
 #if __GLASGOW_HASKELL__ >= 800
 -- | Matching custom generator for field @s@.
-instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (FieldGen s a) g '(con, i, 'Just s) a' where
-  arbitraryOr _ _ (FieldGen gen) _ = gen
-  {-# INLINE arbitraryOr #-}
+instance {-# INCOHERENT #-} (a ~ a')
+  => FindGen ('Match 'INCOHERENT) ('S _fg _coh '(con, i, 'Just s)) (FieldGen s a) gs a' where
+  findGen _ (FieldGen gen) _ = gen
+  {-# INLINEABLE findGen #-}
 
 -- | Matching custom generator for @i@-th field of constructor @c@.
-instance {-# INCOHERENT #-} (a ~ a') => ArbitraryOr fg (ConstrGen c i a) g '( 'Just c, i, s) a' where
-  arbitraryOr _ _ (ConstrGen gen) _ = gen
-  {-# INLINE arbitraryOr #-}
+instance {-# INCOHERENT #-} (a ~ a')
+  => FindGen ('Match 'INCOHERENT) ('S _fg _coh '( 'Just c, i, s)) (ConstrGen c i a) gs a' where
+  findGen _ (ConstrGen gen) _ = gen
+  {-# INLINEABLE findGen #-}
 
 -- | Get the name contained in a 'Meta' tag.
 type family Name (d :: Meta) :: Maybe Symbol
@@ -610,16 +747,53 @@ type instance Name ('MetaCons n _f _s) = 'Just n
 type Name d = (Nothing :: Maybe Symbol)
 #endif
 
--- | Matching custom generator for non-container @f@
-instance {-# INCOHERENT #-} ArbitraryOr fg (Gen1_ f) g sel (f a) where
-  arbitraryOr _ _ (Gen1_ gen) _ = gen
+-- COHERENT
 
--- | Matching custom generator for container @f@. Start the search for containee @a@,
--- discarding field information.
-instance {-# INCOHERENT #-} ArbitraryOr fg () fg '( 'Nothing, 0, 'Nothing) a
-  => ArbitraryOr fg (Gen1 f) g sel (f a) where
-  arbitraryOr _ fg (Gen1 gen) _ = gen (arbitraryOr noSel fg () fg)
-    where noSel = Proxy :: Proxy '( 'Nothing, 0, 'Nothing)
+-- Use a type famaily to do the matching coherently.
+instance FindGen ('MatchCoh (Matches (ASelOf s) g a)) s g gs a
+  => FindGen ('Match 'COHERENT) s g gs a where
+  findGen (_, s, fg) = findGen (im, s, fg) where
+    im = Proxy :: Proxy ('MatchCoh (Matches (ASelOf s) g a))
+
+type family Matches (s :: ASel) (g :: Type) (a :: Type) :: Bool where
+  Matches _sel (Gen b) a = b == a
+  Matches _sel (Gen1_ f) (f a) = 'True
+  Matches _sel (Gen1_ f) a = 'False
+  Matches _sel (Gen1 f) (f a) = 'True
+  Matches _sel (Gen1 f) a = 'False
+  Matches '(_c, i,  s) (FieldGen s1 b) a = s == 'Just s1 && b == a
+  Matches '( c, i, _s) (ConstrGen c1 j b) a = c == 'Just c1 && i == j && b == a
+
+-- If there is no match, skip and shift.
+instance FindGen 'Shift s () gs a => FindGen ('MatchCoh 'False) s _g gs a where
+  findGen (_, s, fg) _ = findGen (iShift, s, fg) () where
+
+-- If there is a match, the search terminates
+
+instance (a ~ a') => FindGen ('MatchCoh 'True) s (Gen a) gs a' where
+  findGen _ g _ = g
+
+instance (f x ~ a') => FindGen ('MatchCoh 'True) s (Gen1_ f) gs a' where
+  findGen _ (Gen1_ g) _ = g
+
+instance (f x ~ a', FindGen 'Shift ('S fg coh DummySel) () fg x)
+  => FindGen ('MatchCoh 'True) ('S fg coh _sel) (Gen1 f) gs a' where
+  findGen (_, _, fg) (Gen1 gen) _ = gen (findGen (iShift, s, fg) () fg) where
+    s  = Proxy :: Proxy ('S fg coh DummySel)
+
+#if __GLASGOW_HASKELL__ >= 800
+-- | Matching custom generator for field @s@.
+instance (a ~ a')
+  => FindGen ('MatchCoh 'True) s (FieldGen sn a) gs a' where
+  findGen _ (FieldGen gen) _ = gen
+
+-- | Matching custom generator for @i@-th field of constructor @c@.
+instance (a ~ a')
+  => FindGen ('MatchCoh 'True) s (ConstrGen c i a) gs a' where
+  findGen _ (ConstrGen gen) _ = gen
+#endif
+
+--
 
 newtype Weighted a = Weighted (Maybe (Int -> Gen a, Int))
   deriving Functor
