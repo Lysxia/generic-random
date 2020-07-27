@@ -1,7 +1,6 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -13,9 +12,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-#if __GLASGOW_HASKELL__ < 710
-{-# LANGUAGE OverlappingInstances #-}
-#endif
 
 -- | Base case discovery.
 --
@@ -30,12 +26,7 @@
 module Generic.Random.Internal.BaseCase where
 
 import Control.Applicative
-#if __GLASGOW_HASKELL__ >= 800
 import Data.Proxy
-#endif
-#if __GLASGOW_HASKELL__ < 710
-import Data.Word
-#endif
 import GHC.Generics
 import GHC.TypeLits
 import Test.QuickCheck
@@ -298,7 +289,6 @@ instance (y ~ 'Nothing) => GBCS (K1 i c) 0 y e where
 instance (y ~ 'Just 0) => GBCS U1 z y e where
   gbcs _ _ = pure U1
 
-#if __GLASGOW_HASKELL__ >= 800
 instance {-# INCOHERENT #-}
   ( TypeError
       (     'Text "Unrecognized Rep: "
@@ -312,7 +302,6 @@ instance {-# INCOHERENT #-}
   , Alternative (IfM y Weighted Proxy)
   ) => GBCS f z y e where
   gbcs = error "Type error"
-#endif
 
 class GBaseCaseSearch a z y e where
   gBaseCaseSearch :: prox y -> proxy '(z, e) -> IfM y Gen Proxy a
@@ -323,18 +312,3 @@ instance (Generic a, GBCS (Rep a) z y e, IsMaybe y)
     (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g)
     (\Proxy -> Proxy)
     (gbcs y z)
-
-#if __GLASGOW_HASKELL__ < 800
-data Proxy a = Proxy
-
-instance Functor Proxy where
-  fmap _ _ = Proxy
-
-instance Applicative Proxy where
-  pure _ = Proxy
-  _ <*> _ = Proxy
-
-instance Alternative Proxy where
-  empty = Proxy
-  _ <|> _ = Proxy
-#endif
