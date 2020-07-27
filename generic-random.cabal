@@ -53,6 +53,17 @@ test-suite unit
   type: exitcode-stdio-1.0
   default-language: Haskell2010
 
+test-suite coherence
+  hs-source-dirs:  test
+  main-is:         coherence.hs
+  build-depends:
+    base,
+    deepseq,
+    QuickCheck,
+    generic-random
+  type: exitcode-stdio-1.0
+  default-language: Haskell2010
+
 test-suite inspect
   hs-source-dirs:  test
   main-is:         Inspect.hs
