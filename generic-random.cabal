@@ -63,5 +63,10 @@ test-suite inspect
     generic-random
   type: exitcode-stdio-1.0
   default-language: Haskell2010
-  if !impl(ghc >= 8.0.2)
+  if !flag(enable-inspect)
     buildable: False
+
+flag enable-inspect
+  description: Enable inspection tests
+  default: False
+  manual: True
