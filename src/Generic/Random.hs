@@ -28,6 +28,7 @@
 -- - http://blog.poisson.chat/posts/2018-01-05-generic-random-tour.html
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 
 module Generic.Random
   (
@@ -171,6 +172,11 @@ module Generic.Random
   , Options ()
   , genericArbitraryWith
 
+    -- ** Setters
+  , SetOptions
+  , type (<+)
+  , setOpts
+
     -- ** Size modifiers
   , Sizing (..)
   , SetSized
@@ -182,6 +188,10 @@ module Generic.Random
   , SetGens
   , setGenerators
 
+    -- ** Coherence options
+  , Coherence (..)
+  , Incoherent (..)
+
     -- ** Common options
   , SizedOpts
   , sizedOpts
@@ -189,6 +199,13 @@ module Generic.Random
   , sizedOptsDef
   , UnsizedOpts
   , unsizedOpts
+
+    -- *** Advanced options
+    -- | See 'Coherence'
+  , CohUnsizedOpts
+  , cohUnsizedOpts
+  , CohSizedOpts
+  , cohSizedOpts
 
     -- * Generic classes
   , GArbitrary
