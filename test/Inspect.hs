@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -dsuppress-all #-}
 {-# LANGUAGE
     DeriveGeneric,
     TemplateHaskell
