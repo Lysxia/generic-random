@@ -27,7 +27,6 @@
 -- - "Generic.Random.Tutorial"
 -- - http://blog.poisson.chat/posts/2018-01-05-generic-random-tour.html
 
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 
 module Generic.Random
@@ -150,12 +149,10 @@ module Generic.Random
     -- Multiple generators may match a given field: the first, leftmost
     -- generator in the list will be chosen.
   , (:+) (..)
-#if __GLASGOW_HASKELL__ >= 800
   , FieldGen (..)
   , fieldGen
   , ConstrGen (..)
   , constrGen
-#endif
   , Gen1 (..)
   , Gen1_ (..)
 

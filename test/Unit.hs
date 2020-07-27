@@ -1,5 +1,4 @@
 {-# LANGUAGE
-    CPP,
     DataKinds,
     DeriveGeneric,
     FlexibleContexts,
@@ -57,7 +56,6 @@ eval name g = do
     Just _ -> return ()
     Nothing -> fail $ name ++ ": did not finish on time"
 
-#if __GLASGOW_HASKELL__ >= 800
 -- Tests for ConstrGen
 
 data Tree2 = Leaf2 Int | Node2 Tree2 Tree2 deriving (Generic, Show)
@@ -69,13 +67,10 @@ isLeftBiased :: Tree2 -> Bool
 isLeftBiased (Leaf2 _) = True
 isLeftBiased (Node2 t (Leaf2 _)) = isLeftBiased t
 isLeftBiased _ = False
-#endif
 
 main :: IO ()
 main = do
   eval "B" (arbitrary :: Gen B)
   eval "T" (arbitrary :: Gen (T (T Int)))
   eval "NTree" (arbitrary :: Gen NTree)
-#if __GLASGOW_HASKELL__ >= 800
   quickCheck . whenFail (putStrLn "Tree2") $ isLeftBiased
-#endif

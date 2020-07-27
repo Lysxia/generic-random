@@ -58,9 +58,6 @@
 --
 -- == Typed weights
 --
--- /GHC 8.0.1 and above only (base ≥ 4.9)./ For compatibility, the annotations
--- are still allowed on older GHC versions, but ignored.
---
 -- The weights actually have type @'W' \"ConstructorName\"@ (just a newtype
 -- around 'Int'), so that you can annotate a weight with its corresponding
 -- constructor. The constructors must appear in the same order as in the
@@ -283,10 +280,7 @@
 -- Suggestions to add more modifiers or otherwise improve this tutorial are welcome!
 -- <https://github.com/Lysxia/generic-random/issues The issue tracker is this way.>
 
-{-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 800
 {-# OPTIONS_GHC -Wno-unused-imports #-}
-#endif
 
 module Generic.Random.Tutorial () where
 

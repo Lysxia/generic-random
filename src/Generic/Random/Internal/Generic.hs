@@ -1,6 +1,5 @@
 {-# OPTIONS_HADDOCK not-home #-}
 
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -16,10 +15,6 @@
 {-# LANGUAGE TypeInType #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-#if __GLASGOW_HASKELL__ < 710
-{-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE IncoherentInstances #-}
-#endif
 
 -- | Core implementation.
 --
@@ -33,30 +28,17 @@
 
 module Generic.Random.Internal.Generic where
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative(..))
-#endif
 import Control.Applicative (Alternative(..), liftA2)
 import Data.Coerce (Coercible, coerce)
-#if __GLASGOW_HASKELL__ >= 800
 import Data.Kind (Type)
-#endif
 
 import Data.Proxy (Proxy(..))
 import Data.Type.Bool (type (&&))
 import Data.Type.Equality (type (==))
 
-#if __GLASGOW_HASKELL__ >= 800
 import GHC.Generics hiding (S, prec)
-#else
-import GHC.Generics hiding (S, Arity, prec)
-#endif
 import GHC.TypeLits (KnownNat, Nat, Symbol, type (+), natVal)
 import Test.QuickCheck (Arbitrary(..), Gen, choose, scale, sized, vectorOf)
-
-#if __GLASGOW_HASKELL__ < 800
-#define Type *
-#endif
 
 -- * Random generators
 
@@ -174,11 +156,7 @@ genericArbitraryWith opts (Weights w n) =
 type family Weights_ (f :: Type -> Type) :: Type where
   Weights_ (f :+: g) = Weights_ f :| Weights_ g
   Weights_ (M1 D _c f) = Weights_ f
-#if __GLASGOW_HASKELL__ >= 800
   Weights_ (M1 C ('MetaCons c _i _j) _f) = L c
-#else
-  Weights_ (M1 C _c _f) = L ""
-#endif
 
 data a :| b = N a Int b
 data L (c :: Symbol) = L
@@ -206,9 +184,6 @@ data Weights a = Weights (Weights_ (Rep a)) Int
 -- @
 -- ((9 :: 'W' \"Leaf\") '%' (8 :: 'W' \"Node\") '%' ())
 -- @
---
--- Note: these annotations are only checked on GHC 8.0 or newer. They are
--- ignored on older GHCs.
 newtype W (c :: Symbol) = W Int deriving Num
 
 -- | A smart constructor to specify a custom distribution.
@@ -235,20 +210,10 @@ type family Prec' w where
   Prec' (Weights a) = Prec (Weights_ (Rep a)) ()
   Prec' (a, Int, r) = Prec a r
 
--- | A synonym for @(~)@, except on GHC 7.10 and older, where it's the trivial
--- constraint. See note on 'W'.
-#if __GLASGOW_HASKELL__ >= 800
-class (a ~ b) => a ~. b
-instance (a ~ b) => a ~. b
-#else
-class a ~. b
-instance a ~. b
-#endif
-
 class WeightBuilder' w where
 
   -- | A binary constructor for building up trees of weights.
-  (%) :: (c ~. First' w) => W c -> Prec' w -> w
+  (%) :: (c ~ First' w) => W c -> Prec' w -> w
 
 instance WeightBuilder (Weights_ (Rep a)) => WeightBuilder' (Weights a) where
   w % prec = weights (w %. prec)
@@ -259,7 +224,7 @@ instance WeightBuilder a => WeightBuilder' (a, Int, r) where
 class WeightBuilder a where
   type Prec a r
 
-  (%.) :: (c ~. First a) => W c -> Prec a r -> (a, Int, r)
+  (%.) :: (c ~ First a) => W c -> Prec a r -> (a, Int, r)
 
 infixr 1 %
 
@@ -462,13 +427,10 @@ type family SetGens (g :: Type) opts
 type instance SetGens g (Options c s _g) = Options c s g
 
 
-#if __GLASGOW_HASKELL__ >= 800
 -- | Custom generator for record fields named @s@.
 --
 -- If there is a field named @s@ with a different type,
 -- this will result in a type error.
---
--- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
 newtype FieldGen (s :: Symbol) a = FieldGen { unFieldGen :: Gen a }
 
 -- | 'FieldGen' constructor with the field name given via a proxy.
@@ -477,14 +439,11 @@ fieldGen _ = FieldGen
 
 -- | Custom generator for the @i@-th field of the constructor named @c@.
 -- Fields are 0-indexed.
---
--- /Available only for @base >= 4.9@ (@GHC >= 8.0.1@)./
 newtype ConstrGen (c :: Symbol) (i :: Nat) a = ConstrGen { unConstrGen :: Gen a }
 
 -- | 'ConstrGen' constructor with the constructor name given via a proxy.
 constrGen :: proxy '(c, i) -> Gen a -> ConstrGen c i a
 constrGen _ = ConstrGen
-#endif
 
 -- | Custom generators for \"containers\" of kind @Type -> Type@, parameterized
 -- by the generator for \"contained elements\".
@@ -726,7 +685,6 @@ instance {-# INCOHERENT #-} FindGen 'Shift ('S fg coh DummySel) () fg a
 
 type DummySel = '( 'Nothing, 0, 'Nothing)
 
-#if __GLASGOW_HASKELL__ >= 800
 -- | Matching custom generator for field @s@.
 instance {-# INCOHERENT #-} (a ~ a')
   => FindGen ('Match 'INCOHERENT) ('S _fg _coh '(con, i, 'Just s)) (FieldGen s a) gs a' where
@@ -743,9 +701,6 @@ instance {-# INCOHERENT #-} (a ~ a')
 type family Name (d :: Meta) :: Maybe Symbol
 type instance Name ('MetaSel mn su ss ds) = mn
 type instance Name ('MetaCons n _f _s) = 'Just n
-#else
-type Name d = (Nothing :: Maybe Symbol)
-#endif
 
 -- COHERENT
 
@@ -781,7 +736,6 @@ instance (f x ~ a', FindGen 'Shift ('S fg coh DummySel) () fg x)
   findGen (_, _, fg) (Gen1 gen) _ = gen (findGen (iShift, s, fg) () fg) where
     s  = Proxy :: Proxy ('S fg coh DummySel)
 
-#if __GLASGOW_HASKELL__ >= 800
 -- | Matching custom generator for field @s@.
 instance (a ~ a')
   => FindGen ('MatchCoh 'True) s (FieldGen sn a) gs a' where
@@ -791,7 +745,6 @@ instance (a ~ a')
 instance (a ~ a')
   => FindGen ('MatchCoh 'True) s (ConstrGen c i a) gs a' where
   findGen _ (ConstrGen gen) _ = gen
-#endif
 
 --
 
