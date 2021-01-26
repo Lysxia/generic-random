@@ -65,6 +65,9 @@ test-suite inspect
   default-language: Haskell2010
   if !flag(enable-inspect)
     buildable: False
+  else
+    build-depends: random < 1.2
+    -- TODO: this test fails with newer versions of random
 
 flag enable-inspect
   description: Enable inspection tests
