@@ -1,0 +1,5 @@
+resolver: lts-16.31
+packages:
+- '.'
+- 'examples/'
+extra-deps: []

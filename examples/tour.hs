@@ -6,14 +6,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
-import Control.Monad
+import Control.Monad (replicateM)
 import GHC.Generics
-import Test.QuickCheck
+import Test.QuickCheck (Arbitrary(..), Gen, quickCheck, sample, generate)
 
-import Generic.Random
+import Generic.Random (genericArbitraryG, (:+)(..), (%))
 
 data MyType
   = OneThing Int
@@ -37,7 +36,7 @@ main :: IO ()
 #ifndef BENCHMODE
 main = do
   -- Print some examples
-  sample (arbitrary @MyType)
+  sample (arbitrary :: Gen MyType)
 
   -- Check the property that ThreeThings contains three things.
   quickCheck $ \case
@@ -46,7 +45,7 @@ main = do
 #else
 -- Quick and dirty benchmark
 main = do
-  xs <- generate (replicateM 1000000 (arbitrary @MyType))
+  xs <- generate (replicateM 1000000 (arbitrary :: Gen MyType))
   go xs
  where
    go [] = print ()
