@@ -40,7 +40,7 @@
 --
 -- The distribution of constructors can be specified as
 -- a special list of /weights/ in the same order as the data type definition.
--- This assigns to each constructor a probability proportional to its weight;
+-- This assigns to each constructor a probability @p_C@ proportional to its weight @weight_C@;
 -- in other words, @p_C = weight_C / sumOfWeights@.
 --
 -- The list of weights is built up with the @('%')@ operator as a cons, and using
@@ -49,7 +49,7 @@
 --
 -- == Uniform distribution
 --
--- You can specify the uniform distribution (all weights equal) with 'uniform'.
+-- You can specify the uniform distribution (all weights equal to 1) with 'uniform'.
 -- ('genericArbitraryU' is available as a shorthand for
 -- @'genericArbitrary' 'uniform'@.)
 --
@@ -66,14 +66,14 @@
 -- constructor. The constructors must appear in the same order as in the
 -- original type definition.
 --
--- This will type-check.
+-- This will type-check:
 --
 -- @
 -- ((x :: 'W' \"Leaf\") '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- ( x              '%' (y :: 'W' \"Node\") '%' ()) :: 'Weights' (Tree a)
 -- @
 --
--- This will not.
+-- This will not:
 --
 -- @
 -- ((x :: 'W' \"Node\") '%' y '%' ()) :: 'Weights' (Tree a)
@@ -88,8 +88,8 @@
 -- As mentioned earlier, one must be careful with recursive types
 -- to avoid producing extremely large values.
 -- The alternative generator 'genericArbitraryRec' decreases the size
--- parameter at every call to keep values at reasonable sizes,
--- to be used together with 'withBaseCase'.
+-- parameter at every call to keep values at reasonable sizes.
+-- It is to be used together with 'withBaseCase'.
 --
 -- For example, we may provide a base case consisting of only @Leaf@:
 --
