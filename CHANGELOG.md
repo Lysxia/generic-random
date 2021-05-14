@@ -1,5 +1,11 @@
 https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
+# 1.4.0.0
+
+- Add option to use only coherent instances
+- Export `SetSized` and `SetUnsized`
+- Drop compatibility with GHC 7
+
 # 1.3.0.1
 
 - Fix small typos in documentation.
