@@ -273,7 +273,6 @@ instance UniformWeight_ (Rep a) => GUniformWeight a
 -- explicitly in code, as the set of options may change in the future.
 -- Instead, use the provided synonyms ('UnsizedOpts', 'SizedOpts', 'SizedOptsDef')
 -- and the setter 'SetOptions' (abbreviated as @('<+')@).
---
 newtype Options (c :: Coherence) (s :: Sizing) (genList :: Type) = Options
   { _generators :: genList
   }
@@ -281,12 +280,16 @@ newtype Options (c :: Coherence) (s :: Sizing) (genList :: Type) = Options
 -- | Setter for 'Options'.
 --
 -- This subsumes the other setters: 'SetSized', 'SetUnsized', 'SetGens'.
+--
+-- @since 1.4.0.0
 type family SetOptions (x :: k) (o :: Type) :: Type
 type instance SetOptions (s :: Sizing) (Options c _s g) = Options c s g
 type instance SetOptions (c :: Coherence) (Options _c s g) = Options c s g
 type instance SetOptions (g :: Type) (Options c s _g) = Options c s g
 
 -- | Infix flipped synonym for 'Options'.
+--
+-- @since 1.4.0.0
 type (<+) o x = SetOptions x o
 infixl 1 <+
 
@@ -296,11 +299,18 @@ type SizedOpts = Options 'INCOHERENT 'Sized ()
 type SizedOptsDef = Options 'INCOHERENT 'Sized (Gen1 [] :+ ())
 
 -- | Like 'UnsizedOpts', but using coherent instances by default.
+--
+-- @since 1.4.0.0
 type CohUnsizedOpts = Options 'COHERENT 'Unsized ()
 
 -- | Like 'SizedOpts', but using coherent instances by default.
+--
+-- @since 1.4.0.0
 type CohSizedOpts = Options 'COHERENT 'Sized ()
 
+-- | Coerce an 'Options' value between types with the same representation.
+--
+-- @since 1.4.0.0
 setOpts :: forall x o. (Coercible o (SetOptions x o)) => o -> SetOptions x o
 setOpts = coerce
 
@@ -385,6 +395,8 @@ setUnsized = coerce
 -- nevertheless helps keep type inference predictable: when a solution is
 -- found, it is unique.
 -- (This is assuredly weaker, i.e., is not stable under specialization.)
+--
+-- @since 1.4.0.0
 data Coherence
   = INCOHERENT  -- ^ Match custom generators incoherently.
   | COHERENT
