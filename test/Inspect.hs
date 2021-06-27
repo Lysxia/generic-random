@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -dsuppress-all #-}
 {-# LANGUAGE
     DeriveGeneric,
+    DerivingVia,
     TemplateHaskell
   #-}
 
@@ -11,6 +12,7 @@ import Test.QuickCheck (Arbitrary(arbitrary), Gen, choose)
 import Test.Inspection (inspect, (===))
 
 import Generic.Random
+import Generic.Random.DerivingVia
 
 arbMaybe :: Arbitrary a => Gen (Maybe a)
 arbMaybe = genericArbitraryU
@@ -25,6 +27,7 @@ arbMaybe' = do
 
 data T = A | B | C Int [Bool]
   deriving Generic
+  deriving Arbitrary via (GenericArbitrary '[1,2,3] T)
 
 arbT :: Gen T
 arbT = genericArbitrary (1 % 2 % 3 % ())
@@ -40,8 +43,12 @@ arbT' = do
     else
       C <$> arbitrary <*> arbitrary
 
+arbT'' :: Gen T
+arbT'' = arbitrary
+
 main :: IO ()
 main = pure ()
 
 inspect $ 'arbMaybe === 'arbMaybe'
 inspect $ 'arbT === 'arbT'
+inspect $ 'arbT === 'arbT''
