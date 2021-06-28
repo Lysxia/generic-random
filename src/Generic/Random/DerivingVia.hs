@@ -243,6 +243,14 @@ instance
         (b, n) = typeLevelWeightsBuilder @weights @a
      in (N a m b, m + n)
 
+instance
+  TypeLevelWeights (w ': ws) (t :| (u :| v)) =>
+  TypeLevelWeights (w ': ws) ((t :| u) :| v)
+  where
+  typeLevelWeightsBuilder =
+    let (N t nt (N u nu v), m) = typeLevelWeightsBuilder @(w ': ws) @(t :| (u :| v))
+     in (N (N t nt u) (nt + nu) v, m)
+
 instance TypeLevelWeights '[] () where
   typeLevelWeightsBuilder = ((), 1)
 
