@@ -244,6 +244,13 @@ instance
      in (N a m b, m + n)
 
 instance
+  ( KnownNat weight
+  ) =>
+  TypeLevelWeights (weight ': '[]) (L x)
+  where
+  typeLevelWeightsBuilder = (L, fromIntegral $ natVal $ Proxy @weight)
+
+instance
   TypeLevelWeights (w ': ws) (t :| (u :| v)) =>
   TypeLevelWeights (w ': ws) ((t :| u) :| v)
   where
