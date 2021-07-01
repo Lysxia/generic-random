@@ -35,14 +35,14 @@ import GHC.TypeLits (KnownNat, natVal)
 import Generic.Random.Internal.Generic
 import Test.QuickCheck (Arbitrary (..), Gen)
 
--- * Random generators (to be  used with DerivingVia)
+-- * Newtypes for DerivingVia
 
 -- | Pick a constructor with a given distribution, and fill its fields
 -- with recursive calls to 'arbitrary'.
 --
 -- === Example
 --
--- > deriving Arbitrary '[2, 3, 5] via (GenericArbitrary X)
+-- > deriving Arbitrary via (GenericArbitrary '[2, 3, 5] X)
 --
 -- Picks the first constructor with probability @2/10@,
 -- the second with probability @3/10@, the third with probability @5/10@.

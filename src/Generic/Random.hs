@@ -208,7 +208,7 @@ module Generic.Random
   , GArbitrary
   , GUniformWeight
 
-  -- * Random generators (to be  used with DerivingVia)
+  -- * Newtypes for DerivingVia
   , GenericArbitrary (..)
   , GenericArbitraryU (..)
   , GenericArbitrarySingle (..)
@@ -222,7 +222,7 @@ module Generic.Random
   --
   -- === __Example__
   --
-  -- > deriving Arbitrary '[2, 3, 5] via (GenericArbitrary X)
+  -- > deriving Arbitrary via (GenericArbitrary '[2, 3, 5] X)
 
   -- ** Helpers typeclasses
   , TypeLevelGenList (..)
