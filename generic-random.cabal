@@ -29,6 +29,7 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Generic.Random
+    Generic.Random.DerivingVia
     Generic.Random.Internal.BaseCase
     Generic.Random.Internal.Generic
     Generic.Random.Tutorial
@@ -67,6 +68,22 @@ test-suite coherence
 test-suite inspect
   hs-source-dirs:  test
   main-is:         Inspect.hs
+  build-depends:
+    base,
+    QuickCheck,
+    inspection-testing,
+    generic-random
+  type: exitcode-stdio-1.0
+  default-language: Haskell2010
+  if !flag(enable-inspect)
+    buildable: False
+  else
+    build-depends: random < 1.2
+    -- TODO: this test fails with newer versions of random
+
+test-suite inspect-derivingvia
+  hs-source-dirs:  test
+  main-is:         Inspect/DerivingVia.hs
   build-depends:
     base,
     QuickCheck,
