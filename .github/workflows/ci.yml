@@ -15,13 +15,14 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         cabal: ["3.2"]
         ghc:
-          - "8.0"
-          - "8.2"
           - "8.4"
           - "8.6"
           - "8.8"
           - "8.10"
+          - "9.0"
         exclude:
+          - os: macOS-latest
+            ghc: 8.10
           - os: macOS-latest
             ghc: 8.8
           - os: macOS-latest
@@ -34,6 +35,8 @@ jobs:
             ghc: 8.0
           - os: windows-latest
             ghc: 8.10
+          - os: windows-latest
+            ghc: 8.8
           - os: windows-latest
             ghc: 8.6
           - os: windows-latest
