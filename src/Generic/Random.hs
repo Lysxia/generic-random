@@ -136,10 +136,10 @@ module Generic.Random
     --   (getNonNegative '<$>' arbitrary)
     -- @
     --
-    -- There are also different types of generators, other than 'Gen', providing
+    -- There are also different types of generators, other than 'Test.QuickCheck.Gen', providing
     -- more ways to select the fields the generator than by simply comparing types:
     --
-    -- - @'Gen' a@: override fields of type @a@;
+    -- - @'Test.QuickCheck.Gen' a@: override fields of type @a@;
     -- - @'Gen1' f@: override fields of type @f x@ for some @x@, requiring a generator for @x@;
     -- - @'Gen1_' f@: override fields of type @f x@ for some @x@, __not__ requiring a generator for @x@;
     -- - @'FieldGen' s a@: override record fields named @s@, which must have type @a@;
@@ -218,6 +218,7 @@ module Generic.Random
   , GenericArbitrarySingleG (..)
   , GenericArbitraryRecG (..)
   , GenericArbitraryWith (..)
+  , AndShrinking (..)
 
   --
   -- === __Example__
