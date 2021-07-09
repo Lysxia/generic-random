@@ -35,7 +35,8 @@ library
     Generic.Random.Tutorial
   build-depends:
     base >= 4.11 && < 5,
-    QuickCheck
+    QuickCheck >= 2.14
+    -- exports RecursivelyShrink
   default-language:    Haskell2010
   ghc-options: -Wall -fno-warn-name-shadowing
 
