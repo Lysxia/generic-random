@@ -23,31 +23,37 @@ module Generic.Random.DerivingVia
     GenericArbitrarySingleG (..),
     GenericArbitraryRecG (..),
     GenericArbitraryWith (..),
+    AndShrinking (..),
     TypeLevelGenList (..),
     TypeLevelOpts (..),
   )
 where
 
+import Data.Coerce (Coercible, coerce)
 import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
-import GHC.Generics hiding (S, prec)
+import GHC.Generics (Generic(..))
 import GHC.TypeLits (KnownNat, natVal)
 import Generic.Random.Internal.Generic
-import Test.QuickCheck (Arbitrary (..), Gen)
+import Test.QuickCheck (Arbitrary (..), Gen, genericShrink)
+import Test.QuickCheck.Arbitrary (RecursivelyShrink, GSubterms)
 
 -- * Newtypes for DerivingVia
 
 -- | Pick a constructor with a given distribution, and fill its fields
--- with recursive calls to 'arbitrary'.
+-- with recursive calls to 'Test.QuickCheck.arbitrary'.
 --
 -- === Example
 --
--- > deriving Arbitrary via (GenericArbitrary '[2, 3, 5] X)
+-- > data X = ...
+-- >   deriving Arbitrary via (GenericArbitrary '[2, 3, 5] X)
 --
 -- Picks the first constructor with probability @2/10@,
 -- the second with probability @3/10@, the third with probability @5/10@.
 --
--- Use 'genericArbitrary'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitrary'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitrary weights a = GenericArbitrary {unGenericArbitrary :: a} deriving (Eq, Show)
@@ -62,7 +68,9 @@ instance
 
 -- | Pick every constructor with equal probability.
 --
--- Use 'genericArbitraryU'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryU'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryU a = GenericArbitraryU {unGenericArbitraryU :: a} deriving (Eq, Show)
@@ -75,10 +83,12 @@ instance
   where
   arbitrary = GenericArbitraryU <$> genericArbitraryU
 
--- | 'arbitrary' for types with one constructor.
+-- | @arbitrary@ for types with one constructor.
 -- Equivalent to 'GenericArbitraryU', with a stricter type.
 --
--- Use 'genericArbitrarySingle'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitrarySingle'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitrarySingle a = GenericArbitrarySingle {unGenericArbitrarySingle :: a} deriving (Eq, Show)
@@ -94,13 +104,16 @@ instance
 -- | Decrease size at every recursive call, but don't do anything different
 -- at size 0.
 --
--- > deriving Arbitrary '[2, 3, 5] via (GenericArbitraryRec X)
+-- > data X = ...
+-- >   deriving Arbitrary via (GenericArbitraryRec '[2, 3, 5] X)
 --
 -- N.B.: This replaces the generator for fields of type @[t]@ with
 -- @'listOf'' arbitrary@ instead of @'Test.QuickCheck.listOf' arbitrary@ (i.e., @arbitrary@ for
 -- lists).
 --
--- Use 'genericArbitraryRec'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryRec'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryRec weights a = GenericArbitraryRec {unGenericArbitraryRec :: a} deriving (Eq, Show)
@@ -117,20 +130,23 @@ instance
 --
 -- === Example
 --
--- > deriving Arbitrary '[2, 3, 5] via (GenericArbitraryG CustomGens X)
+-- > data X = ...
+-- >   deriving Arbitrary via (GenericArbitraryG CustomGens '[2, 3, 5] X)
 --
--- where, the generators for 'String' and 'Int' fields are overridden as
--- follows, for example:
+-- where, for example, custom generators to override 'String' and 'Int' fields
+-- might look as follows:
 --
 -- @
--- type CustomGens :: CustomString ':+' CustomInt
+-- type CustomGens = CustomString ':+' CustomInt
 -- @
 --
 -- === Note on multiple matches
 --
 -- Multiple generators may match a given field: the first will be chosen.
 --
--- Use 'genericArbitraryG'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryG'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryG genList weights a = GenericArbitraryG {unGenericArbitraryG :: a} deriving (Eq, Show)
@@ -149,7 +165,9 @@ instance
 -- | 'GenericArbitraryU' with explicit generators.
 -- See also 'GenericArbitraryG'.
 --
--- Use 'genericArbitraryUG'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryUG'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryUG genList a = GenericArbitraryUG {unGenericArbitraryUG :: a} deriving (Eq, Show)
@@ -167,7 +185,9 @@ instance
 -- | 'genericArbitrarySingle' with explicit generators.
 -- See also 'GenericArbitraryG'.
 --
--- Use 'genericArbitrarySingleG'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitrarySingleG'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitrarySingleG genList a = GenericArbitrarySingleG {unGenericArbitrarySingleG :: a} deriving (Eq, Show)
@@ -185,7 +205,9 @@ instance
 -- | 'genericArbitraryRec' with explicit generators.
 -- See also 'genericArbitraryG'.
 --
--- Use 'genericArbitraryRecG'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryRecG'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryRecG genList weights a = GenericArbitraryRecG {unGenericArbitraryRecG :: a} deriving (Eq, Show)
@@ -202,7 +224,9 @@ instance
 
 -- | General generic generator with custom options.
 --
--- Use 'genericArbitraryWith'.
+-- This newtype does no shrinking. To add generic shrinking, use 'AndShrinking'.
+--
+-- Uses 'genericArbitraryWith'.
 --
 -- @since 1.5.0.0
 newtype GenericArbitraryWith opts weights a = GenericArbitraryWith {unGenericArbitraryWith :: a} deriving (Eq, Show)
@@ -216,6 +240,28 @@ instance
   Arbitrary (GenericArbitraryWith opts' weights a)
   where
   arbitrary = GenericArbitraryWith <$> genericArbitraryWith (toOpts $ Proxy @opts') (typeLevelWeights @weights)
+
+-- | Add generic shrinking to a newtype wrapper for 'Arbitrary', using 'genericShrink'.
+--
+-- @
+-- data X = ...
+--   deriving Arbitrary via ('GenericArbitrary' '[1,2,3] `'AndShrinking'` X)
+-- @
+--
+-- Equivalent to:
+--
+-- @
+-- instance Arbitrary X where
+--   arbitrary = 'genericArbitrary' (1 % 2 % 3 % ())
+--   shrink = 'Test.QuickCheck.genericShrink'
+-- @
+newtype AndShrinking f a = AndShrinking a deriving (Eq, Show)
+
+instance
+  ( Arbitrary (f a), Coercible (f a) a, Generic a, RecursivelyShrink (Rep a), GSubterms (Rep a) a
+  ) => Arbitrary (AndShrinking f a) where
+  arbitrary = coerce (arbitrary :: Gen (f a))
+  shrink = coerce (genericShrink :: a -> [a])
 
 -- * Internal
 
