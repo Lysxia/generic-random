@@ -27,6 +27,7 @@ module Generic.Random.Internal.BaseCase where
 
 import Control.Applicative
 import Data.Proxy
+import Data.Kind (Type)
 import GHC.Generics
 import GHC.TypeLits
 import Test.QuickCheck
@@ -75,7 +76,7 @@ withBaseCase def bc = sized $ \sz ->
 --
 -- @e@ is the original type the search started with, that @a@ appears in.
 -- It is used for error reporting.
-class BaseCaseSearch (a :: *) (z :: Nat) (y :: Maybe Nat) (e :: *) where
+class BaseCaseSearch (a :: Type) (z :: Nat) (y :: Maybe Nat) (e :: Type) where
   baseCaseSearch :: prox y -> proxy '(z, e) -> IfM y Gen Proxy a
 
 
@@ -180,7 +181,7 @@ type instance MinOf 'EQ m n = n
 type instance MinOf 'LT m n = m
 
 class Alternative (IfM y Weighted Proxy)
-  => GBCS (f :: k -> *) (z :: Nat) (y :: Maybe Nat) (e :: *) where
+  => GBCS (f :: k -> Type) (z :: Nat) (y :: Maybe Nat) (e :: Type) where
   gbcs :: prox y -> proxy '(z, e) -> IfM y Weighted Proxy (f p)
 
 instance GBCS f z y e => GBCS (M1 i c f) z y e where
