@@ -3,6 +3,8 @@
 -- = Basic usage
 --
 -- @
+-- {-\# LANGUAGE DeriveGeneric \#-}
+--
 -- data Foo = A | B | C  -- some generic data type
 --   deriving 'GHC.Generics.Generic'
 -- @
@@ -11,7 +13,8 @@
 --
 -- @
 -- instance Arbitrary Foo where
---   arbitrary = 'genericArbitrary' 'uniform'  -- give a distribution of constructors
+--   arbitrary = 'genericArbitrary' 'uniform'  -- Give a distribution of constructors.
+--   shrink = 'Test.QuickCheck.genericShrink'  -- Generic shrinking is provided by the QuickCheck library.
 -- @
 --
 -- Or derive standalone generators (the fields must still be instances of
@@ -20,6 +23,16 @@
 -- @
 -- genFoo :: Gen Foo
 -- genFoo = 'genericArbitrary' 'uniform'
+-- @
+--
+-- === Using @DerivingVia@
+--
+-- @
+-- {-\# LANGUAGE DerivingVia, TypeOperators \#-}
+--
+-- data Foo = A | B | C
+--   deriving 'GHC.Generics.Generic'
+--   deriving Arbitrary via ('GenericArbitraryU' `'AndShrinking'` Foo)
 -- @
 --
 -- For more information:
@@ -209,6 +222,9 @@ module Generic.Random
   , GUniformWeight
 
   -- * Newtypes for DerivingVia
+
+  -- | These newtypes correspond to the variants of 'genericArbitrary' above.
+
   , GenericArbitrary (..)
   , GenericArbitraryU (..)
   , GenericArbitrarySingle (..)
@@ -219,11 +235,6 @@ module Generic.Random
   , GenericArbitraryRecG (..)
   , GenericArbitraryWith (..)
   , AndShrinking (..)
-
-  --
-  -- === __Example__
-  --
-  -- > deriving Arbitrary via (GenericArbitrary '[2, 3, 5] X)
 
   -- ** Helpers typeclasses
   , TypeLevelGenList (..)
