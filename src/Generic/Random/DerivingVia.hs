@@ -255,6 +255,8 @@ instance
 --   arbitrary = 'genericArbitrary' (1 % 2 % 3 % ())
 --   shrink = 'Test.QuickCheck.genericShrink'
 -- @
+--
+-- @since 1.5.0.0
 newtype AndShrinking f a = AndShrinking a deriving (Eq, Show)
 
 instance
@@ -265,6 +267,8 @@ instance
 
 -- * Internal
 
+-- |
+-- @since 1.5.0.0
 type TypeLevelWeights' weights a = TypeLevelWeights weights (Weights_ (Rep a))
 
 typeLevelWeights ::
@@ -275,6 +279,8 @@ typeLevelWeights =
   let (w, n) = typeLevelWeightsBuilder @weights
    in Weights w n
 
+-- |
+-- @since 1.5.0.0
 class TypeLevelWeights weights a where
   typeLevelWeightsBuilder :: (a, Int)
 
@@ -307,6 +313,8 @@ instance
 instance TypeLevelWeights '[] () where
   typeLevelWeightsBuilder = ((), 1)
 
+-- |
+-- @since 1.5.0.0
 class TypeLevelGenList a where
   type TypeLevelGenList' a :: Type
   toGenList :: Proxy a -> TypeLevelGenList' a
@@ -319,6 +327,8 @@ instance (TypeLevelGenList a, TypeLevelGenList b) => TypeLevelGenList (a :+ b) w
   type TypeLevelGenList' (a :+ b) = TypeLevelGenList' a :+ TypeLevelGenList' b
   toGenList _ = toGenList (Proxy @a) :+ toGenList (Proxy @b)
 
+-- |
+-- @since 1.5.0.0
 class TypeLevelOpts a where
   type TypeLevelOpts' a :: Type
   toOpts :: Proxy a -> TypeLevelOpts' a
