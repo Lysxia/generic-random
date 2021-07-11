@@ -4,7 +4,7 @@ Latest version: https://github.com/Lysxia/generic-random/blob/master/changelog.m
 
 # 1.5.0.0
 
-- Add newtypes for `DerivingVia`
+- Add newtypes for `DerivingVia` (thanks, blackheaven)
 - Drop compatibility with GHC 8.0 and 8.2
 
 # 1.4.0.0
