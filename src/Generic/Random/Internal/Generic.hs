@@ -406,7 +406,7 @@ data Coherence
 type family CoherenceOf (o :: Type) :: Coherence
 type instance CoherenceOf (Options c _s _g) = c
 
--- | Match this generator incoherently when the 'INCOHERENT' option is set.
+-- | Match this generator incoherently when the 'COHERENT' option is set.
 newtype Incoherent g = Incoherent g
 
 
