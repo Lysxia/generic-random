@@ -188,7 +188,9 @@ instance GBCS f z y e => GBCS (M1 i c f) z y e where
   gbcs y z = fmap M1 (gbcs y z)
 
 instance
-  ( GBCSSum f g z e yf yg
+  ( Alternative (IfM y Weighted Proxy)  -- logically redundant, but GHC isn't clever
+                                        -- enough to deduce; see #32
+  , GBCSSum f g z e yf yg
   , GBCS f z yf e
   , GBCS g z yg e
   , y ~ (yf ||? yg)
@@ -236,7 +238,9 @@ instance GBCSSumCompare f g z e 'GT where
   gbcsSumCompare _ _ _ g = fmap R1 g
 
 instance
-  ( GBCSProduct f g z e yf yg
+  ( Alternative (IfM y Weighted Proxy)  -- logically redundant, but GHC isn't clever
+                                        -- enough to deduce; see #32
+  , GBCSProduct f g z e yf yg
   , GBCS f z yf e
   , GBCS g z yg e
   , y ~ (yf &&? yg)
