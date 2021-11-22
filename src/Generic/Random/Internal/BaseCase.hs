@@ -314,6 +314,8 @@ class GBaseCaseSearch a z y e where
 instance (Generic a, GBCS (Rep a) z y e, IsMaybe y)
   => GBaseCaseSearch a z y e where
   gBaseCaseSearch y z = ifMmap y
-    (\(Weighted (Just (g, n))) -> choose (0, n-1) >>= fmap to . g)
+    (\(Weighted gn) -> case gn of
+      Just (g, n) -> choose (0, n-1) >>= fmap to . g
+      Nothing -> error "How could this happen?")
     (\Proxy -> Proxy)
     (gbcs y z)
