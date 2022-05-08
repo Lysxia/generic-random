@@ -1,4 +1,4 @@
-Generic random generators [![Hackage](https://img.shields.io/hackage/v/generic-random.svg)](https://hackage.haskell.org/package/generic-random) [![Build Status](https://travis-ci.org/Lysxia/generic-random.svg)](https://travis-ci.org/Lysxia/generic-random)
+Generic random generators [![Hackage](https://img.shields.io/hackage/v/generic-random.svg)](https://hackage.haskell.org/package/generic-random) [![Build Status](https://github.com/Lysxia/generic-random/actions/workflows/ci.yml/badge.svg)](https://github.com/Lysxia/generic-random/actions/workflows/ci.yml)
 =========================
 
 Generic random generators
