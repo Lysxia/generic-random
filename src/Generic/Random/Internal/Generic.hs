@@ -369,6 +369,15 @@ setUnsized = coerce
 --
 -- === __Details__
 --
+-- tl;dr:
+--
+-- - The default setting is 'INCOHERENT'.
+-- - You can use 'COHERENT' (via 'CohUnsizedOpts' or 'CohSizedOpts') to make
+--   sure that no incoherent instances ever occur in your instance search.
+-- - In 'COHERENT' mode, you can still selectively enable 'Incoherent' for
+--   individual generators. Doing this carefully might ensure a unique solution
+--   for instance resolution, even if incoherent.
+--
 -- The default configuration of generic-random does a decent job if
 -- we trust GHC implements precisely the instance resolution algorithm as
 -- described in the GHC manual:
@@ -382,7 +391,7 @@ setUnsized = coerce
 -- guaranteed to be unique: the behavior of the program is dependent on
 -- implementation details.
 --
--- An notable property to consider of an implicit type system (such as type
+-- A notable property to consider of an implicit type system (such as type
 -- classes) is coherence: the behavior of the program is stable under
 -- specialization.
 --
@@ -401,7 +410,7 @@ data Coherence
   = INCOHERENT  -- ^ Match custom generators incoherently.
   | COHERENT
     -- ^ Match custom generators coherently by default
-    -- (can be manually bypassed with 'Incoherent').
+    -- (can be locally bypassed with 'Incoherent').
 
 type family CoherenceOf (o :: Type) :: Coherence
 type instance CoherenceOf (Options c _s _g) = c

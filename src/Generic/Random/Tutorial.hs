@@ -173,14 +173,16 @@
 -- Some combinators are available for further tweaking: 'listOf'', 'listOf1'',
 -- 'vectorOf''.
 --
--- = Custom generators for some fields
+-- = Custom generators for some fields #custom#
 --
 -- == Example 1 ('Test.QuickCheck.Gen', 'FieldGen')
 --
 -- Sometimes, a few fields may need custom generators instead of 'Test.QuickCheck.arbitrary'.
--- For example, imagine here that @String@ is meant to represent
--- alphanumerical strings only, and that IDs are meant to be nonnegative,
--- whereas balances can have any sign.
+-- For example, imagine here that:
+--
+-- - @String@ is meant to represent alphanumerical strings only,
+-- - IDs are meant to be nonnegative,
+-- - balances can have any sign.
 --
 -- @
 -- data User = User {
@@ -212,11 +214,17 @@
 -- Now we use the 'genericArbitraryG' combinator and other @G@-suffixed
 -- variants that accept those explicit generators.
 --
+-- With the above @customGens@, a generic 'Arbitrary' instance will have the following properties:
+--
 -- - All @String@ fields will use the provided generator of
 --   alphanumeric strings;
 -- - the field @"userId"@ of type @Int@ will use the generator
 --   of nonnegative integers;
--- - everything else defaults to 'Test.QuickCheck.arbitrary'.
+-- - @userBalance@ defaults to 'Test.QuickCheck.arbitrary'.
+--
+-- Random @User@ values will thus satisfy the above requirements.
+-- In particular, @'FieldGen' \"userId\" Int@ avoids overriding the
+-- @userBalance@ field so that negative values are still generated.
 --
 -- @
 -- instance Arbitrary User where
