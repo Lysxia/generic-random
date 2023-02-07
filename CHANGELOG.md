@@ -2,7 +2,7 @@
 
 Latest version: https://github.com/Lysxia/generic-random/blob/master/changelog.md
 
-# 1.5.1.0
+# 1.5.0.1
 
 - Support GHC 9.2
 
