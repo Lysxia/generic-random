@@ -23,7 +23,7 @@ category:            Generics, Testing
 build-type:          Simple
 extra-source-files:  README.md CHANGELOG.md
 cabal-version:       >=1.10
-tested-with:         GHC == 8.4.1, GHC == 8.6.1, GHC == 8.8.4, GHC == 8.10.5, GHC == 9.0.1, GHC == 9.2.1
+tested-with:         GHC == 8.4.1, GHC == 8.6.1, GHC == 8.8.4, GHC == 8.10.5, GHC == 9.0.1, GHC == 9.2.7, GHC == 9.4.4, GHC == 9.6.1
 
 library
   hs-source-dirs:      src
